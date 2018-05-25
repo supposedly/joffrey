@@ -1,10 +1,10 @@
 """
 argparse sucks
-
 this sucks too but less
 """
 import inspect
 import keyword
+import os
 import shlex
 import sys
 from collections import defaultdict
@@ -12,6 +12,7 @@ from functools import wraps
 from itertools import zip_longest as zipln
 
 
+_FILE = os.path.basename(sys.argv[0])
 _Null = type('_NullType', (), {'__slots__': ()})()
 
 
@@ -76,14 +77,42 @@ class Parser:
             return typecast(cb)(*args, **kwargs)
         return wrapper
     
+    @property
+    def usage(self):
+        flags = {
+          ('-{} |'.format(i.p_short) if i.p_short else '', '--{}'.format(i.__name__)):
+          ' '.join(map(str.upper, i.p_args))
+          for i in self.flags.values()
+          }
+        return '{} {} [flags: {}]'.format(
+          _FILE,
+          ' '.join('[{}]'.format(i) for i in {j.__name__ for j in self.args.values()}),
+          ' '.join('[{}{}{}]'.format(' '.join(name), ' ' if args else '', args) for name, args in flags.items())
+          )
+    
+    @property
     def help(self):
-        print('FLAGS')
-        for name, doc in {i.__name__: i.__doc__ for i in self.flags.values()}.items():
-            print(' ', name, ' ' * (15 - len(name)), doc)
-        print('ARGS')
-        for name, doc in {i.__name__: i.__doc__ for i in self.args.values()}.items():
-            print(' ', name, ' ' * (15 - len(name)), doc)
+        return '\n'.join(
+          '{}\n{}'.format(
+            label.upper(),
+            '\n'.join({
+              '  {: <15} {}'.format(i.__name__, i.__doc__)
+              for i in getattr(self, label).values()
+            }),
+          )
+          for label in ('args', 'flags')
+        )
+    
+    def format_help(self, usage=True):
+        built = ['']
+        if usage:
+            built.append('usage: {}\n'.format(self.usage))
+        built.append(self.help)
+        return '\n'.join(built)
 
+    def print_help(self, usage=True):
+        print(self.format_help(usage))
+    
     def parse(self, _inp=sys.argv[1:], *, consume=False):
         args = []
         flags = {}
@@ -93,9 +122,8 @@ class Parser:
         if isinstance(_inp, str):
             _inp = shlex.split(_inp)
         
-        if f'{self._long_prefix}help' in _inp or any('h' in i for i in _inp if i.startswith(self._flag_prefix) and not i.startswith(self._long_prefix)):
-            self.help()
-            sys.exit()
+        if self._long_prefix + 'help' in _inp or any('h' in i for i in _inp if i.startswith(self._flag_prefix) and not i.startswith(self._long_prefix)):
+            raise SystemExit(self.format_help())
         
         inp = _inp.copy()
         
@@ -194,7 +222,7 @@ class Parser:
         except StopIteration:
             pass
         else:
-            raise ValueError(f'''Expected at least one of the following flags/arguments: '{"', '".join(names)}' (got none)''')
+            raise ValueError("Expected at least one of the following flags/arguments: '{}' (got none)".format("', '".join(names)))
         
         try:
             # XOR
@@ -202,7 +230,7 @@ class Parser:
         except StopIteration:
             pass
         else:
-            raise ValueError(f'''Expected no more than one of the following flags/arguments: '{"', '".join(names)}' (got '{"', '".join(fin_set & names)}')''')
+            raise ValueError("Expected no more than one of the following flags/arguments: '{}' (got '{}')".format("', '".join(names), "', '".join(fin_set & names)))
         
         try:
             # AND
@@ -210,13 +238,13 @@ class Parser:
         except StopIteration:
             pass
         else:
-            raise ValueError(f'''Expected all of the following flags/arguments: '{"', '".join(names)}' (only got '{"', '".join(fin_set & names)}')''')
+            raise ValueError("Expected all of the following flags/arguments: '{}' (only got '{}')".format("', '".join(names), "', '".join(fin_set & names)))
         
         if self.p_used and self._required ^ self._got:
             # required
             got = {i.__name__ for i in self._got}
             required = {i.__name__ for i in self._required}
-            raise ValueError(f'''Expected the following required flags/arguments: '{"', '".join(required)}' (only got '{"', '".join(fin_set & got)}')''')
+            raise ValueError("Expected the following required flags/arguments: '{}' (only got '{}')".format("', '".join(required), "', '".join(fin_set & got)))
     
     def clump(self, *, OR=_Null, XOR=_Null, AND=_Null):
         def wrapper(cb):
@@ -260,13 +288,17 @@ class Parser:
     def flag(self, dest=None, short=None, *, default=_Null, namespace={}, required=False):
         def wrapper(cb):
             sig: inspect.Signature = inspect.signature(cb)
-            cb.p_short = short or cb.__name__
+            _short = short if isinstance(short, str) else cb.__name__[0]
+            cb.p_short = _short if _short and _short not in self.flags else None
             cb.p_namespace = namespace and FlagLocalNamespace(**namespace)
+            cb.p_args = list(sig.parameters.keys())[bool(namespace):]
             cb.p_nargs = len(sig.parameters) - bool(namespace)
             cb.p_used = False
             cb.p_required = required
             cb.p_or = cb.p_and = cb.p_xor = _Null
-            self.flags[cb.__name__] = self.flags[cb.p_short] = cb
+            self.flags[cb.__name__] = cb
+            if cb.p_short is not None:
+                self.flags[cb.p_short] = cb
             if default is not _Null:
                 self._defaults[cb.__name__] = default
             if required:
@@ -276,9 +308,9 @@ class Parser:
     
     def group(self, name, *, required=False, OR=_Null, XOR=_Null, AND=_Null):
         if name in vars(self):
-            raise ValueError(f'Group name already in use for this parser: {name}')
+            raise ValueError('Group name already in use for this parser: ' + name)
         if keyword.iskeyword(name) or not name.isidentifier():
-            raise ValueError(f'Invalid group name: {name}')
+            raise ValueError('Invalid group name: ' + name)
         ret = Group(getattr(self, 'parser', self), name, OR, XOR, AND)
         if required:
             self._required.add(ret)

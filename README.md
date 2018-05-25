@@ -26,7 +26,7 @@ def scream(text: str):
 @parser.clump(AND='blah')  # i.e. this flag and `scream` *must* appear together (same AND)
 @parser.flag('verbosity', namespace={'count': 0})
 def verbose(nsp):
-    """This nothing but it demos namespaces (which are always passed as the first arg)"""
+    """This does nothing but it shows namespaces (which are always passed as the first arg)"""
     if nsp.count < 5:
         nsp.count += 1
     return nsp.count
