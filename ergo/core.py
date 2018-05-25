@@ -189,7 +189,7 @@ class Parser:
         self._final = final
         try:
             self._check_clumps(final)
-        except ValueError
+        except ValueError:
             raise
         
         for group in self._groups:
