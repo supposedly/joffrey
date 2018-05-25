@@ -11,35 +11,36 @@ Sample:
 from ergo import Parser
 
 parser = Parser()
+parser.group('sc', XOR=0)  # nothing special about 0; it's just an identifier
+
 
 @parser.arg()
 def name(name):
     """Args, positional, are parsed in the order they're added in"""
     return name
 
-@parser.clump(XOR=0, AND='blah')  # nothing special about the rvalues as long as they're unique to their clump
-@parser.flag(short='S')
-def scream(text: str):
+@parser.sc.clump(AND='blah')
+@parser.sc.flag(short='S')
+def scream(text):
     """I have no mouth and I must ... yeah"""
     return text.upper()
 
-@parser.clump(AND='blah')  # i.e. this flag and `scream` *must* appear together (same AND)
-@parser.flag('verbosity', namespace={'count': 0})
+@parser.sc.clump(AND='blah')  # this flag and `scream` *must* appear together (same AND)
+@parser.sc.flag('verbosity', namespace={'count': 0})
 def verbose(nsp):
     """This does nothing but it shows namespaces (which are always passed as the first arg)"""
     if nsp.count < 5:
         nsp.count += 1
     return nsp.count
 
-@parser.clump(XOR=0)  # i.e. this flag *cannot* appear alongside `scream` (same XOR)
+@parser.clump(XOR=0)  # this flag *cannot* appear alongside group `sc` (same XOR)
 @parser.flag('addition')
-def add(a: int, b: int):  # can also provide default args if needed
-    """Who needs a calculator tbh"""
+def add(a: int, b: int = 0):  # can also provide default args if needed
+    """Who needs a calculator"""
     return a + b
-
 ```
 ```py
->>> parser.parse('foo -S "test test" -vvvv')  # input will be shlex.split() if isinstance(..., str)
+>>> parser.parse('foo -S "test test" -vvvv')  # input will be shlex.split if given as a string (defaults to sys.argv though)
 {'name': 'foo', 'scream': 'TEST TEST', 'verbosity': 4}
 >>> parser.parse('foo -v')
 ValueError: Expected all of the following arguments: 'verbosity', 'scream' (only got 'verbosity')
@@ -62,3 +63,5 @@ cmd = parser.command('etc')
 
 # To do
 so much
+
+(step 1 would be figuring out aliases for commands, and making groups transparent)

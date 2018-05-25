@@ -96,7 +96,7 @@ class Parser:
           '{}\n{}'.format(
             label.upper(),
             '\n'.join({
-              '  {: <15} {}'.format(i.__name__, i.__doc__)
+              '\t{: <15} {}'.format(i.__name__, i.__doc__)
               for i in getattr(self, label).values()
             }),
           )
@@ -111,9 +111,9 @@ class Parser:
         return '\n'.join(built)
 
     def print_help(self, usage=True):
-        print(self.format_help(usage))
+        print(self.format_help(usage), end='\n\n')
     
-    def parse(self, _inp=sys.argv[1:], *, consume=False):
+    def _parse(self, _inp=sys.argv[1:], *, consume=False):
         args = []
         flags = {}
         final = self._defaults
@@ -187,7 +187,10 @@ class Parser:
                     self._resolve_clumps(obj.p_group)
         
         self._final = final
-        self._check_clumps(final)
+        try:
+            self._check_clumps(final)
+        except ValueError
+            raise
         
         for group in self._groups:
             group._check_clumps(final)
@@ -197,7 +200,17 @@ class Parser:
             for idx in (idx for idx, val in enumerate(_inp) if val in final.values()):
                 del _inp[idx]
         return final
-
+    
+    def parse(self, *args, **kwargs):
+        try:
+            return self._parse(*args, **kwargs)
+        except KeyError as e:
+            self.print_help()
+            raise SystemExit('Unexpected flag/argument: {}'.format(str(e).split("'")[1]))
+        except ValueError as e:
+            self.print_help()
+            raise SystemExit(e)
+    
     def _resolve_clumps(self, obj):
         obj.p_used = True
         OR = obj.p_or
@@ -207,7 +220,7 @@ class Parser:
             self._or[OR][0] = True  # one or more (doesn't matter how many)
         if AND is not _Null:
             to_check = [] if self._and[AND][0] is _Null else self._and[AND][0]
-            self._and[AND][0] = [i for i in self._and[AND] if _Null is not i is not obj and i not in to_check]  # that should be [] when finished
+            self._and[AND][0] = to_check + [f for f in self._and[AND][1:] if _Null is not f is not obj and f not in to_check]  # AND[0] should be [] when finished
         if XOR is not _Null:
             self._xor[XOR][0] = self._xor[XOR][0] is _Null  # only once
         if obj in self._required:
@@ -234,7 +247,7 @@ class Parser:
         
         try:
             # AND
-            names = {i.__name__ for i in next(rest for sign, *rest in self._and.values() if sign and getattr(self, 'p_used', True))}
+            names = {i.__name__ for i in next(rest for sign, *rest in self._and.values() if len([] if sign is _Null else sign) < len(rest) and getattr(self, 'p_used', True))}
         except StopIteration:
             pass
         else:

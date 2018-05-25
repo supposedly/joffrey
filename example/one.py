@@ -1,61 +1,36 @@
-import textwrap
-
-from ergo.core import Parser
-
+from ergo import Parser
 
 parser = Parser()
-parser.nofind = parser.group('other_than_find', XOR='find')
-preview = parser.command('preview')
+parser.group('sc', XOR=0)
 
 
 @parser.arg()
-def infile(path):
-    """rueltabel-formatted input file"""
-    return path
+def name(name):
+    """Args, positional, are parsed in the order they're added in"""
+    return name
 
 
-@parser.flag('verbosity', 'v', namespace={'count': 0})
+@parser.sc.clump(AND='blah')  # nothing special about the rvalues here as long as they're unique to their clump
+@parser.sc.flag(short='S')
+def scream(text):
+    """I have no mouth and I must ... yeah"""
+    return text.upper()
+
+
+@parser.sc.clump(AND='blah')  # this flag and `scream` *must* appear together (same AND)
+@parser.sc.flag('verbosity', namespace={'count': 0})
 def verbose(nsp):
-    """Max x4 (repeat for more verbosity)"""
-    if nsp.count < 4:
+    """This does nothing but it shows namespaces (which are always passed as the first arg)"""
+    if nsp.count < 5:
         nsp.count += 1
     return nsp.count
 
 
-@parser.nofind.arg()
-def outdir(path):
-    """Directory to write output file to"""
-    return path
-
-
-@parser.nofind.flag(short='t')
-def header(text=''):
-    """Change or hide 'COMPILED FROM RUELTABEL' header"""
-    return text or textwrap.dedent(
-      '''\
-      *********************************
-      **** COMPILED FROM RUELTABEL ****
-      *********************************
-      '''
-      )
-
-
-@parser.nofind.flag(short='s', default=False)
-def comment_src():
-    """Comment each tabel source line above the final table line(s) it transpiles to"""
-    return True
-
-
-@parser.clump(XOR='find')
-@parser.flag('match', short='f')
-def find(tr):
-    """Locate first transition in `infile` that matches"""
-    return tr.split(',')
-
-
-@preview.arg()
-def transition(tr):
-    return tr
+@parser.clump(XOR=0)  # this flag *cannot* appear alongside `scream` (same XOR)
+@parser.flag('addition')
+def add(a: int, b: int = 0):  # can also provide default args if needed
+    """Who needs a calculator"""
+    return a + b
 
 
 print(parser.parse())
