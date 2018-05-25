@@ -10,6 +10,7 @@ import sys
 from collections import defaultdict
 from functools import wraps
 from itertools import zip_longest as zipln
+from types import SimpleNamespace
 
 
 _FILE = os.path.basename(sys.argv[0])
@@ -39,9 +40,13 @@ def typecast(func):
     return wrapper
 
 
-class FlagLocalNamespace:
-    def __init__(self, **kwargs):
-        self.__dict__.update(**kwargs)
+class FlagLocalNamespace(SimpleNamespace):
+    pass
+
+
+class ErgoNamespace(SimpleNamespace):
+    def __getattr__(self, name):
+        return None
 
 
 class Flarg:
@@ -54,6 +59,7 @@ class Parser:
         self._flag_prefix = flag_prefix
         self._long_prefix = 2 * flag_prefix
         self.p_used = True
+        self.p_required = False
         self.p_or = self.p_xor = self.p_and = _Null
         if not flag_prefix:
             raise ValueError('Flag prefix must not be empty')
@@ -201,15 +207,19 @@ class Parser:
                 del _inp[idx]
         return final
     
-    def parse(self, *args, **kwargs):
+    def parse(self, *args, as_dict=False, **kwargs):
         try:
-            return self._parse(*args, **kwargs)
+            parsed = self._parse(*args, **kwargs)
         except KeyError as e:
             self.print_help()
             raise SystemExit('Unexpected flag/argument: {}'.format(str(e).split("'")[1]))
         except ValueError as e:
             self.print_help()
             raise SystemExit(e)
+        
+        if as_dict:
+            return parsed
+        return ErgoNamespace(**parsed)
     
     def _resolve_clumps(self, obj):
         obj.p_used = True
@@ -310,10 +320,10 @@ class Parser:
             cb.p_required = required
             cb.p_or = cb.p_and = cb.p_xor = _Null
             self.flags[cb.__name__] = cb
-            if cb.p_short is not None:
-                self.flags[cb.p_short] = cb
             if default is not _Null:
                 self._defaults[cb.__name__] = default
+            if cb.p_short is not None:
+                self.flags[cb.p_short] = cb
             if required:
                 self._required.add(cb)
             return cb
