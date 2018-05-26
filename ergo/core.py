@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 
 _FILE = os.path.basename(sys.argv[0])
-_Null = type('_NullType', (), {'__slots__': ()})()
+_Null = type('_NullType', (), {'__slots__': (), '__repr__': lambda self: '<_Null>'})()
 
 
 def typecast(func):
@@ -40,6 +40,10 @@ def typecast(func):
     return wrapper
 
 
+def clump_factory():
+    return [_Null]
+
+
 class FlagLocalNamespace(SimpleNamespace):
     pass
 
@@ -58,9 +62,9 @@ class Parser:
         self.p_or = self.p_xor = self.p_and = _Null
         if not flag_prefix:
             raise ValueError('Flag prefix must not be empty')
-        self._or = defaultdict(lambda: [_Null])
-        self._xor = defaultdict(lambda: [_Null])
-        self._and = defaultdict(lambda: [_Null])
+        self._or = defaultdict(clump_factory)
+        self._xor = defaultdict(clump_factory)
+        self._and = defaultdict(clump_factory)
         self._required = set()
         self._got = set()
         self._groups = set()
@@ -71,6 +75,12 @@ class Parser:
         self.flags = {}
         self.args = {}
     
+    def __repr__(self):
+        return '{}(flag_prefix={!r})'.format(
+          self.__class__.__name__,
+          self._flag_prefix
+          )
+
     @staticmethod
     def _prep(cb):
         def wrapper(*args, **kwargs):
@@ -159,12 +169,12 @@ class Parser:
             if val in self.commands:
                 args.pop(arg_idx)
                 obj = self.commands[val]
-                if not hasattr(obj, 'p_group'):
-                    self._resolve_clumps(obj)
-                else:
+                if hasattr(obj, 'p_group'):
                     obj.p_group._resolve_clumps(obj)
                     if not obj.p_group.p_used:
                         self._resolve_clumps(obj.p_group)
+                else:
+                    self._resolve_clumps(obj)
                 final[val] = obj.parse(inp[1+inp.index(val):], consume=True)
                 continue
             try:
@@ -174,22 +184,22 @@ class Parser:
                     raise
                 continue
             final[arg] = self._prep(obj)(val)
-            if not hasattr(obj, 'p_group'):
-                self._resolve_clumps(obj)
-            else:
+            if hasattr(obj, 'p_group'):
                 obj.p_group._resolve_clumps(obj)
                 if not obj.p_group.p_used:
                     self._resolve_clumps(obj.p_group)
+            else:
+                self._resolve_clumps(obj)
         
         for flag, res in flags.items():
             final[flag] = res
             obj = self.flags[flag]
-            if not hasattr(obj, 'p_group'):
-                self._resolve_clumps(obj)
-            else:
+            if hasattr(obj, 'p_group'):
                 obj.p_group._resolve_clumps(obj)
                 if not obj.p_group.p_used:
                     self._resolve_clumps(obj.p_group)
+            else:
+                self._resolve_clumps(obj)
         
         self._final = final
         self._check_clumps(final)
@@ -201,6 +211,7 @@ class Parser:
             # doesn't work (i.e. doesn't do what it's supposed to bc doesn't mutate original list at all)
             for idx in (idx for idx, val in enumerate(_inp) if val in final.values()):
                 del _inp[idx]
+        
         return final
     
     def parse(self, *args, as_dict=False, **kwargs):
@@ -211,11 +222,8 @@ class Parser:
             raise SystemExit('Unexpected flag/argument: {}'.format(str(e).split("'")[1]))
         except Exception as e:
             self.print_help()
-            raise SystemExit(e)
-        
-        if as_dict:
-            return parsed
-        return ErgoNamespace(**parsed)
+            raise SystemExit(e if str(e) else type(e))
+        return parsed if as_dict else ErgoNamespace(**parsed)
     
     def _resolve_clumps(self, obj):
         obj.p_used = True
@@ -225,9 +233,9 @@ class Parser:
         if OR is not _Null:
             self._or[OR][0] = True  # one or more (doesn't matter how many)
         if AND is not _Null:
+            # self._and[AND][0] will be identical to self._and[AND][1:] when finished
             to_check = [] if self._and[AND][0] is _Null else self._and[AND][0]
             self._and[AND][0] = to_check + [f for f in self._and[AND][1:] if _Null is not f is not obj and f not in to_check]
-            # self._and[AND][0] will be identical to self._and[AND][1:] when finished
         if XOR is not _Null:
             self._xor[XOR][0] = self._xor[XOR][0] is _Null  # only once
         if obj in self._required:
@@ -271,6 +279,7 @@ class Parser:
             names = {
               name for i in next(rest for sign, *rest in self._and.values()
                 if len([] if sign is _Null else sign) < len(rest)
+                # and not any(map(fin_names.__contains__, (getattr(i, 'g_name', i.__name__) for i in rest)))
                 and getattr(self, 'p_used', True)
                 )
               for name in getattr(i, 'g_name', [i.__name__])
@@ -281,7 +290,7 @@ class Parser:
             true_names = {self._aliases.get(name, name) for name in names}
             raise ValueError("Expected all of the following flags/arguments: '{}' (only got '{}')".format("', '".join(names), "', '".join(fin_names & true_names)))
         
-        if self.p_used and self._required ^ self._got:
+        if self.p_used and self._required - self._got:
             # required
             got = {self._aliases.get(name, name) for i in self._got for name in getattr(i, 'g_name', [i.__name__])}
             required = {name for i in self._required for name in getattr(i, 'g_name', [i.__name__])}
@@ -289,6 +298,8 @@ class Parser:
     
     def clump(self, *, OR=_Null, XOR=_Null, AND=_Null):
         def wrapper(cb):
+            if isinstance(self, Group):
+                cb.p_group = self  # eeeeh...
             if OR is not _Null:
                 self._or[OR].append(cb)
             if XOR is not _Null:
@@ -384,9 +395,19 @@ class Group(Parser):
         self._required = set()
         self._got = set()
         self._all = set()
-        self._or = defaultdict(lambda: [_Null])
-        self._xor = defaultdict(lambda: [_Null])
-        self._and = defaultdict(lambda: [_Null])
+        self._or = defaultdict(clump_factory)
+        self._xor = defaultdict(clump_factory)
+        self._and = defaultdict(clump_factory)
+    
+    def __repr__(self):
+        return '{}(parser={!r}, name={!r}, OR={!r}, XOR={!r}, AND={!r})'.format(
+          self.__class__.__name__,
+          self.parser,
+          self.__name__,
+          self.p_or,
+          self.p_xor,
+          self.p_and
+          )
     
     @property
     def g_name(self):

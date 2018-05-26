@@ -1,9 +1,9 @@
 # It Sucks Less Than Argparse™
 
 
-Yet another argparse substitute, this one heavily inspired by [discord.py](Rapptz/discord.py)'s "[commands extension](http://discordpy.readthedocs.io/en/rewrite/ext/commands/index.html)".
+Yet another argparse substitute, this one heavily inspired by [discord.py](https://github.com/Rapptz/discord.py)'s
+"[commands extension](http://discordpy.readthedocs.io/en/rewrite/ext/commands/index.html)".
 Sorta clunky and the above shoehorning occasionally shows. But it's clearer than argparse, in the designer's humble opinion!
-
 
 Sample:
 
