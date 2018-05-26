@@ -11,7 +11,7 @@ Sample:
 from ergo import Parser
 
 parser = Parser()
-parser.group('sc', XOR=0)  # nothing special about 0; it's just an identifier
+parser.group('sc', XOR=0)  # 0 is just an identifier; nothing special about it
 
 
 @parser.arg()
@@ -33,7 +33,7 @@ def verbose(nsp):
         nsp.count += 1
     return nsp.count
 
-@parser.clump(XOR=0)  # this flag *cannot* appear alongside group `sc` (same XOR)
+@parser.clump(XOR=0)  # this flag *cannot* appear alongside any in group `sc` (same XOR)
 @parser.flag('addition')
 def add(a: int, b: int = 0):  # can also provide default args if needed
     """Who needs a calculator"""
@@ -49,7 +49,7 @@ Expected all of the following flags/arguments: 'scream', 'verbose' (only got 've
 ErgoNamespace(addition=3, name='foo')
 >>> parser.parse('foo --add 1 2 -S "this is gonna error" -v')
 <usage/help info...>
-Expected no more than one of the following flags/arguments: 'add', 'sc' (got 'addition')
+Expected no more than one of the following flags/arguments: 'scream', 'add', 'verbose' (got 'scream', 'verbosity', 'addition')
 >>> # etc
 ```
 

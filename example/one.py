@@ -28,9 +28,9 @@ def verbose(nsp):
 
 @parser.clump(XOR=0)  # this flag *cannot* appear alongside `scream` (same XOR)
 @parser.flag('addition')
-def add(a: int, b: int = 0):  # can also provide default args if needed
+def add(a: int, *b: int):  # can also provide default args if needed
     """Who needs a calculator"""
-    return a + b
+    return a + sum(b)
 
 
 print(parser.parse())

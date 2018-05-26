@@ -9,7 +9,7 @@ import shlex
 import sys
 from collections import defaultdict
 from functools import wraps
-from itertools import zip_longest as zipln
+from itertools import islice, zip_longest as zipln
 from types import SimpleNamespace
 
 
@@ -49,11 +49,6 @@ class ErgoNamespace(SimpleNamespace):
         return self.__getattribute__(name)
 
 
-class Flarg:
-    """Flag/argument, do something to resolve aliases"""
-    pass
-
-
 class Parser:
     def __init__(self, *, flag_prefix='-'):
         self._flag_prefix = flag_prefix
@@ -88,12 +83,12 @@ class Parser:
     def usage(self):
         flags = {
           ('-{} |'.format(i.p_short) if i.p_short else '', '--{}'.format(i.__name__)):
-          ' '.join(map(str.upper, i.p_args))
+          ' '.join(i.p_args)
           for i in self.flags.values()
           }
         return '{} {} {}'.format(
           _FILE,
-          ' '.join('[{}]'.format(i) for i in {j.__name__ for j in self.args.values()}),
+          ' '.join("`{}'".format(i) for i in {j.__name__ for j in self.args.values()}),
           ' '.join('[{}{}{}]'.format(' '.join(name), ' ' if args else '', args) for name, args in flags.items())
           )
     
@@ -142,9 +137,9 @@ class Parser:
                 flag = val.lstrip(self._flag_prefix)
                 name = self._aliases.get(flag, flag)
                 skip = self.flags[name].p_nargs
-                next_flag = next(i for i, v in enumerate(inp[idx:], idx) if v.startswith(self._flag_prefix))
-                if next_flag < skip + idx:
-                    skip -= next_flag - idx
+                next_pos = next((i for i, v in enumerate(inp[1+idx:]) if v.startswith(self._flag_prefix)), len(inp))
+                if next_pos < skip + idx:
+                    skip = next_pos
                 flags[name] = self._prep(self.flags[name])(*inp[1+idx:1+skip+idx])
             elif val.startswith(self._flag_prefix):
                 for v in val.lstrip(self._flag_prefix)[:-1]:
@@ -152,9 +147,9 @@ class Parser:
                     flags[name] = self._prep(self.flags[name])()
                 fin = self._aliases.get(val[-1], val[-1])
                 skip = self.flags[fin].p_nargs
-                next_flag = next(i for i, v in enumerate(inp[idx:], idx) if v.startswith(self._flag_prefix))
-                if next_flag < skip + idx:
-                    skip -= next_flag - idx
+                next_pos = next((i for i, v in enumerate(inp[1+idx:]) if v.startswith(self._flag_prefix)), len(inp))
+                if next_pos < skip + idx:
+                    skip = next_pos
                 flags[fin] = self._prep(self.flags[fin])(*inp[1+idx:1+skip+idx])
             else:
                 args.append(val)
@@ -214,7 +209,7 @@ class Parser:
         except KeyError as e:
             self.print_help()
             raise SystemExit('Unexpected flag/argument: {}'.format(str(e).split("'")[1]))
-        except ValueError as e:
+        except Exception as e:
             self.print_help()
             raise SystemExit(e)
         
@@ -244,7 +239,13 @@ class Parser:
         
         try:
             # OR
-            names = {i.__name__ for i in next(rest for sign, *rest in self._or.values() if not sign and not all(self._xor[j.p_xor] or not j.p_required for j in rest))}
+            names = {
+              name for i in next(rest for sign, *rest in self._or.values()
+                if not sign
+                and not all(self._xor[j.p_xor] or not j.p_required for j in rest)
+                )
+              for name in getattr(i, 'g_name', [i.__name__])
+              }
         except StopIteration:
             pass
         else:
@@ -252,7 +253,13 @@ class Parser:
         
         try:
             # XOR
-            names = {i.__name__ for i in next(rest for sign, *rest in self._xor.values() if not sign and all(j.p_used if j.p_required else True for j in rest))}
+            names = {
+              name for i in next(rest for sign, *rest in self._xor.values()
+                if not sign
+                and all(j.p_used if j.p_required else True for j in rest)
+                )
+              for name in getattr(i, 'g_name', [i.__name__])
+              }
         except StopIteration:
             pass
         else:
@@ -261,7 +268,13 @@ class Parser:
         
         try:
             # AND
-            names = {i.__name__ for i in next(rest for sign, *rest in self._and.values() if len([] if sign is _Null else sign) < len(rest) and getattr(self, 'p_used', True))}
+            names = {
+              name for i in next(rest for sign, *rest in self._and.values()
+                if len([] if sign is _Null else sign) < len(rest)
+                and getattr(self, 'p_used', True)
+                )
+              for name in getattr(i, 'g_name', [i.__name__])
+              }
         except StopIteration:
             pass
         else:
@@ -270,8 +283,8 @@ class Parser:
         
         if self.p_used and self._required ^ self._got:
             # required
-            got = {self._aliases.get(i.__name__, i.__name__) for i in self._got}
-            required = {i.__name__ for i in self._required}
+            got = {self._aliases.get(name, name) for i in self._got for name in getattr(i, 'g_name', [i.__name__])}
+            required = {name for i in self._required for name in getattr(i, 'g_name', [i.__name__])}
             raise ValueError("Expected the following required flags/arguments: '{}' (only got '{}')".format("', '".join(required), "', '".join(fin_names & got)))
     
     def clump(self, *, OR=_Null, XOR=_Null, AND=_Null):
@@ -323,8 +336,10 @@ class Parser:
             _short = short if isinstance(short, str) else name[0]
             cb.p_short = _short if _short and _short not in self.flags else None
             cb.p_namespace = namespace and FlagLocalNamespace(**namespace)
-            cb.p_args = list(sig.parameters)[bool(namespace):]
+            cb.p_args = ['*'[val.kind != 2:] + name.upper() for name, val in islice(sig.parameters.items(), bool(namespace), None)]
             cb.p_nargs = len(sig.parameters) - bool(namespace)
+            if any(i.kind == 2 for i in sig.parameters.values()):  # inspect.Parameter.VAR_POSITIONAL == 2
+                cb.p_nargs = sys.maxsize  # why not?
             cb.p_used = False
             cb.p_required = required
             cb.p_or = cb.p_and = cb.p_xor = _Null
@@ -344,6 +359,8 @@ class Parser:
         if keyword.iskeyword(name) or not name.isidentifier():
             raise ValueError('Invalid group name: ' + name)
         ret = Group(getattr(self, 'parser', self), name, OR, XOR, AND)
+        setattr(self, ret.__name__, ret)
+        self._groups.add(ret)
         if required:
             self._required.add(ret)
         if OR is not _Null:
@@ -352,8 +369,6 @@ class Parser:
             self._xor[XOR].append(ret)
         if AND is not _Null:
             self._and[AND].append(ret)
-        setattr(self, ret.__name__, ret)
-        self._groups.add(ret)
         return ret
 
 
@@ -368,9 +383,14 @@ class Group(Parser):
         self.p_required = True
         self._required = set()
         self._got = set()
+        self._all = set()
         self._or = defaultdict(lambda: [_Null])
         self._xor = defaultdict(lambda: [_Null])
         self._and = defaultdict(lambda: [_Null])
+    
+    @property
+    def g_name(self):
+        return {i.__name__ for i in self._all}
     
     @property
     def args(self):
@@ -402,6 +422,7 @@ class Group(Parser):
     def command(self, *args, **kwargs):
         def wrapper(cb):
             cb.p_group = self
+            self._all.add(cb)
             if kwargs.get('required'):
                 self._required.add(cb)
                 kwargs['required'] = False
@@ -411,6 +432,7 @@ class Group(Parser):
     def flag(self, *args, **kwargs):
         def wrapper(cb):
             cb.p_group = self
+            self._all.add(cb)
             if kwargs.get('required'):
                 self._required.add(cb)
                 kwargs['required'] = False
@@ -420,6 +442,7 @@ class Group(Parser):
     def arg(self, *args, **kwargs):
         def wrapper(cb):
             cb.p_group = self
+            self._all.add(cb)
             if kwargs.get('required'):
                 self._required.add(cb)
                 kwargs['required'] = False
