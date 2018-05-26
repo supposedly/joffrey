@@ -9,7 +9,7 @@ import shlex
 import sys
 from collections import defaultdict
 from functools import wraps
-from itertools import islice, zip_longest as zipln
+from itertools import chain, islice, zip_longest
 from types import SimpleNamespace
 
 
@@ -32,7 +32,8 @@ def typecast(func):
         # Assign default to handle **kwargs annotation if not given/callable
         if not callable(kw_annot.get(None)):
             kw_annot[None] = lambda x: x
-        fill = zipln(pos_annot, args, fillvalue=pos_annot[-1] if pos_annot else None)
+        # zip_longest to account for any var_positional argument
+        fill = zip_longest(pos_annot, args, fillvalue=pos_annot[-1] if pos_annot else None)
         return func(
           *(hint(val) if callable(hint) else val for hint, val in fill),
           **{a: kw_annot[a](b) if a in kw_annot and callable(kw_annot[a]) else kw_annot[None](b) for a, b in kwargs.items()}
@@ -76,7 +77,9 @@ class Parser:
         self.args = {}
     
     def __repr__(self):
-        return '{}(flag_prefix={!r})'.format(
+        return '<{!r} {}.{}, flag_prefix={!r}>'.format(
+          getattr(self, '__name__', '__main__'),
+          self.__class__.__module__,
           self.__class__.__name__,
           self._flag_prefix
           )
@@ -96,9 +99,10 @@ class Parser:
           ' '.join(i.p_args)
           for i in self.flags.values()
           }
-        return '{} {} {}'.format(
+        return '{} {}{} {}'.format(
           _FILE,
-          ' '.join("`{}'".format(i) for i in {j.__name__ for j in self.args.values()}),
+          self.__name__ + ' ' if hasattr(self, '__name__') else '',  # for subcommands
+          ' '.join(map("`{}'".format, self.args)),
           ' '.join('[{}{}{}]'.format(' '.join(name), ' ' if args else '', args) for name, args in flags.items())
           )
     
@@ -115,20 +119,32 @@ class Parser:
           for label in ('args', 'flags')
         )
     
-    def format_help(self, usage=True):
+    @property
+    def subcommands(self):
+        return ', '.join(self.commands)
+    
+    def format_help(self, usage=True, commands=True):
         built = ['']
         if usage:
-            built.append('usage: {}\n'.format(self.usage))
+            built.append('usage: {}'.format(self.usage))
+        if commands and self.commands:
+            built.append('subcommands: {}'.format(self.subcommands))
+        if usage or commands:
+            built.append('')
         built.append(self.help)
         return '\n'.join(built)
 
     def print_help(self, usage=True):
         print(self.format_help(usage), end='\n\n')
     
-    def _parse(self, _inp=sys.argv[1:], *, consume=False):
+    def _parse(self, _inp=sys.argv[1:], *, as_dict=False, consume=False, parent_flags: set = None):
         args = []
         flags = {}
         final = self._defaults
+        subcommand_flags = {flag for sub in self.commands.values() for flag in chain(sub.flags, sub._aliases)}
+        super_flags = set() if parent_flags is None else parent_flags
+        ignored_flags = {*subcommand_flags, *super_flags}
+        consumed = set()
         skip = 0
 
         if isinstance(_inp, str):
@@ -145,6 +161,10 @@ class Parser:
                 continue
             if val.startswith(self._long_prefix):
                 flag = val.lstrip(self._flag_prefix)
+                if flag in ignored_flags:
+                    continue
+                if consume:
+                    consumed.add(idx)
                 name = self._aliases.get(flag, flag)
                 skip = self.flags[name].p_nargs
                 next_pos = next((i for i, v in enumerate(inp[1+idx:]) if v.startswith(self._flag_prefix)), len(inp))
@@ -153,38 +173,55 @@ class Parser:
                 flags[name] = self._prep(self.flags[name])(*inp[1+idx:1+skip+idx])
             elif val.startswith(self._flag_prefix):
                 for v in val.lstrip(self._flag_prefix)[:-1]:
+                    if v in ignored_flags:
+                        continue
+                    if consume:
+                        consumed.add(idx)
                     name = self._aliases.get(v, v)
                     flags[name] = self._prep(self.flags[name])()
                 fin = self._aliases.get(val[-1], val[-1])
+                if fin in ignored_flags:
+                    continue
                 skip = self.flags[fin].p_nargs
                 next_pos = next((i for i, v in enumerate(inp[1+idx:]) if v.startswith(self._flag_prefix)), len(inp))
                 if next_pos < skip + idx:
                     skip = next_pos
                 flags[fin] = self._prep(self.flags[fin])(*inp[1+idx:1+skip+idx])
+                if consume:
+                    consumed.update(range(idx, 1 + skip + idx))  # we consumed the flag + all its arguments
             else:
                 args.append(val)
+                if consume:
+                    consumed.add(idx)
         
         for arg_idx, (arg, val) in enumerate(zip(self.args, args)):
             val = self._aliases.get(val, val)
             if val in self.commands:
                 args.pop(arg_idx)
                 obj = self.commands[val]
-                if hasattr(obj, 'p_group'):
+                if obj.p_group is not None:
                     obj.p_group._resolve_clumps(obj)
                     if not obj.p_group.p_used:
                         self._resolve_clumps(obj.p_group)
                 else:
                     self._resolve_clumps(obj)
-                final[val] = obj.parse(inp[1+inp.index(val):], consume=True)
+                subparse_start = 1 + inp.index(val)
+                parsed, _consumed = obj._parse(
+                  inp[subparse_start:],
+                  consume=True,
+                  parent_flags={*super_flags, *self.flags, *self._aliases}
+                  )
+                final[val] = parsed if as_dict else ErgoNamespace(**parsed)
+                _consumed_vals = {inp[i] for i in _consumed}
+                for i, v in enumerate(args):  # don't really like this
+                    if v in _consumed_vals:
+                        del args[i]
+                inp = [v for i, v in enumerate(inp, -subparse_start) if i not in _consumed and v != val]
                 continue
-            try:
-                obj = self.args[arg]
-            except KeyError:
-                if not consume:
-                    raise
-                continue
+            
+            obj = self.args[arg]
             final[arg] = self._prep(obj)(val)
-            if hasattr(obj, 'p_group'):
+            if obj.p_group is not None:
                 obj.p_group._resolve_clumps(obj)
                 if not obj.p_group.p_used:
                     self._resolve_clumps(obj.p_group)
@@ -194,7 +231,7 @@ class Parser:
         for flag, res in flags.items():
             final[flag] = res
             obj = self.flags[flag]
-            if hasattr(obj, 'p_group'):
+            if obj.p_group is not None:
                 obj.p_group._resolve_clumps(obj)
                 if not obj.p_group.p_used:
                     self._resolve_clumps(obj.p_group)
@@ -206,17 +243,11 @@ class Parser:
         
         for group in self._groups:
             group._check_clumps(final)
-        
-        if consume:
-            # doesn't work (i.e. doesn't do what it's supposed to bc doesn't mutate original list at all)
-            for idx in (idx for idx, val in enumerate(_inp) if val in final.values()):
-                del _inp[idx]
-        
-        return final
+        return (final, consumed) if consume else final
     
     def parse(self, *args, as_dict=False, **kwargs):
         try:
-            parsed = self._parse(*args, **kwargs)
+            parsed = self._parse(*args, as_dict=as_dict, **kwargs)
         except KeyError as e:
             self.print_help()
             raise SystemExit('Unexpected flag/argument: {}'.format(str(e).split("'")[1]))
@@ -247,7 +278,7 @@ class Parser:
         
         try:
             # OR
-            names = {
+            or_names = {
               name for i in next(rest for sign, *rest in self._or.values()
                 if not sign
                 and not all(self._xor[j.p_xor] or not j.p_required for j in rest)
@@ -257,11 +288,11 @@ class Parser:
         except StopIteration:
             pass
         else:
-            raise ValueError("Expected at least one of the following flags/arguments: '{}' (got none)".format("', '".join(names)))
+            raise ValueError("Expected at least one of the following flags/arguments: '{}' (got none)".format("', '".join(or_names)))
         
         try:
             # XOR
-            names = {
+            xor_names = {
               name for i in next(rest for sign, *rest in self._xor.values()
                 if not sign
                 and all(j.p_used if j.p_required else True for j in rest)
@@ -271,15 +302,17 @@ class Parser:
         except StopIteration:
             pass
         else:
-            true_names = {self._aliases.get(name, name) for name in names}
-            raise ValueError("Expected no more than one of the following flags/arguments: '{}' (got '{}')".format("', '".join(names), "', '".join(fin_names & true_names)))
+            xor_true_names = {self._aliases.get(name, name) for name in xor_names}
+            raise ValueError("Expected no more than one of the following flags/arguments: '{}' (got '{}')".format("', '".join(xor_names), "', '".join(fin_names & xor_true_names)))
         
         try:
             # AND
-            names = {
+            and_names = {
               name for i in next(rest for sign, *rest in self._and.values()
-                if len([] if sign is _Null else sign) < len(rest)
-                # and not any(map(fin_names.__contains__, (getattr(i, 'g_name', i.__name__) for i in rest)))
+                if len(
+                  [i for i in rest if i.p_xor is not _Null or getattr(i.p_group, 'p_xor', _Null) is not _Null]
+                  if sign is _Null else sign
+                  ) < len(rest)
                 and getattr(self, 'p_used', True)
                 )
               for name in getattr(i, 'g_name', [i.__name__])
@@ -287,8 +320,8 @@ class Parser:
         except StopIteration:
             pass
         else:
-            true_names = {self._aliases.get(name, name) for name in names}
-            raise ValueError("Expected all of the following flags/arguments: '{}' (only got '{}')".format("', '".join(names), "', '".join(fin_names & true_names)))
+            and_true_names = {self._aliases.get(name, name) for name in and_names}
+            raise ValueError("Expected all of the following flags/arguments: '{}' (only got '{}')".format("', '".join(and_names), "', '".join(fin_names & and_true_names)))
         
         if self.p_used and self._required - self._got:
             # required
@@ -320,6 +353,7 @@ class Parser:
             self.args[cb.__name__] = cb
             if required:
                 self._required.add(cb)
+            cb.p_group = getattr(cb, 'p_group', None)
             return cb
         return wrapper
     
@@ -327,6 +361,7 @@ class Parser:
         ret = self.__class__(*args, **kwargs)
         ret.__name__ = name
         ret.p_used = False
+        ret.p_group = getattr(ret, 'p_group', None)
         self.commands[name] = ret
         for alias in aliases:
             self._aliases[alias] = name
@@ -349,6 +384,7 @@ class Parser:
             cb.p_namespace = namespace and FlagLocalNamespace(**namespace)
             cb.p_args = ['*'[val.kind != 2:] + name.upper() for name, val in islice(sig.parameters.items(), bool(namespace), None)]
             cb.p_nargs = len(sig.parameters) - bool(namespace)
+            cb.p_group = getattr(cb, 'p_group', None)
             if any(i.kind == 2 for i in sig.parameters.values()):  # inspect.Parameter.VAR_POSITIONAL == 2
                 cb.p_nargs = sys.maxsize  # why not?
             cb.p_used = False
