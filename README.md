@@ -41,17 +41,19 @@ def add(a: int, b: int = 0):  # can also provide default args if needed
 ```
 ```py
 >>> parser.parse('foo -S "test test" -vvvv')  # input will be shlex.split if given as a string (defaults to sys.argv though)
-{'name': 'foo', 'scream': 'TEST TEST', 'verbosity': 4}
+ErgoNamespace(name='foo', scream='TEST TEST', verbosity=4)
 >>> parser.parse('foo -v')
-ValueError: Expected all of the following arguments: 'verbosity', 'scream' (only got 'verbosity')
+<usage/help info...>
+Expected all of the following flags/arguments: 'scream', 'verbose' (only got 'verbosity')
 >>> parser.parse('foo --add 1 2')
-{'name': 'foo', 'addition': 3}
+ErgoNamespace(addition=3, name='foo')
 >>> parser.parse('foo --add 1 2 -S "this is gonna error" -v')
-ValueError: Expected at most one of the following arguments: 'scream', 'addition' (got 'scream', 'addition')
+<usage/help info...>
+Expected no more than one of the following flags/arguments: 'add', 'sc' (got 'addition')
 >>> # etc
 ```
 
-The only things not deco-based are "groups" and "commands" -- commands are basically sub-parsers (so like argparse's subcommands) and groups are so you can do `mygroup = parser.add_group(AND=blah, OR=blah, XOR=blah)` and then `@mygroup.flag`/`.arg` (rather than `@parser.flag`/`.arg`); those clump settings apply to the whole group rather than to each flag/arg within it.
+The only things not deco-based are "groups" and "commands" -- commands are basically sub-parsers (argparse's subcommands) and groups are so you can do `mygroup = parser.add_group(AND=blah, OR=blah, XOR=blah)` and then `@mygroup.flag`/`.arg` (rather than `@parser.flag`/`.arg`); those clump settings apply to the whole group rather than to each flag/arg within it.
 
 ```py
 parser = Parser()
@@ -63,5 +65,3 @@ cmd = parser.command('etc')
 
 # To do
 so much
-
-(step 1 would be figuring out aliases for commands, and making groups transparent)

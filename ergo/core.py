@@ -45,8 +45,8 @@ class FlagLocalNamespace(SimpleNamespace):
 
 
 class ErgoNamespace(SimpleNamespace):
-    def __getattr__(self, name):
-        return None
+    def __getitem__(self, name):
+        return self.__getattribute__(name)
 
 
 class Flarg:
@@ -71,6 +71,7 @@ class Parser:
         self._groups = set()
         self._final = None
         self._defaults = {}
+        self._aliases = {}
         self.commands = {}
         self.flags = {}
         self.args = {}
@@ -90,7 +91,7 @@ class Parser:
           ' '.join(map(str.upper, i.p_args))
           for i in self.flags.values()
           }
-        return '{} {} [flags: {}]'.format(
+        return '{} {} {}'.format(
           _FILE,
           ' '.join('[{}]'.format(i) for i in {j.__name__ for j in self.args.values()}),
           ' '.join('[{}{}{}]'.format(' '.join(name), ' ' if args else '', args) for name, args in flags.items())
@@ -139,15 +140,17 @@ class Parser:
                 continue
             if val.startswith(self._long_prefix):
                 flag = val.lstrip(self._flag_prefix)
-                skip = self.flags[flag].p_nargs
+                name = self._aliases.get(flag, flag)
+                skip = self.flags[name].p_nargs
                 next_flag = next(i for i, v in enumerate(inp[idx:], idx) if v.startswith(self._flag_prefix))
                 if next_flag < skip + idx:
                     skip -= next_flag - idx
-                flags[flag] = self._prep(self.flags[flag])(*inp[1+idx:1+skip+idx])
+                flags[name] = self._prep(self.flags[name])(*inp[1+idx:1+skip+idx])
             elif val.startswith(self._flag_prefix):
                 for v in val.lstrip(self._flag_prefix)[:-1]:
-                    flags[v] = self._prep(self.flags[v])()
-                fin = val[-1]
+                    name = self._aliases.get(v, v)
+                    flags[name] = self._prep(self.flags[name])()
+                fin = self._aliases.get(val[-1], val[-1])
                 skip = self.flags[fin].p_nargs
                 next_flag = next(i for i, v in enumerate(inp[idx:], idx) if v.startswith(self._flag_prefix))
                 if next_flag < skip + idx:
@@ -157,6 +160,7 @@ class Parser:
                 args.append(val)
         
         for arg_idx, (arg, val) in enumerate(zip(self.args, args)):
+            val = self._aliases.get(val, val)
             if val in self.commands:
                 args.pop(arg_idx)
                 obj = self.commands[val]
@@ -193,10 +197,7 @@ class Parser:
                     self._resolve_clumps(obj.p_group)
         
         self._final = final
-        try:
-            self._check_clumps(final)
-        except ValueError:
-            raise
+        self._check_clumps(final)
         
         for group in self._groups:
             group._check_clumps(final)
@@ -230,7 +231,8 @@ class Parser:
             self._or[OR][0] = True  # one or more (doesn't matter how many)
         if AND is not _Null:
             to_check = [] if self._and[AND][0] is _Null else self._and[AND][0]
-            self._and[AND][0] = to_check + [f for f in self._and[AND][1:] if _Null is not f is not obj and f not in to_check]  # AND[0] should be [] when finished
+            self._and[AND][0] = to_check + [f for f in self._and[AND][1:] if _Null is not f is not obj and f not in to_check]
+            # self._and[AND][0] will be identical to self._and[AND][1:] when finished
         if XOR is not _Null:
             self._xor[XOR][0] = self._xor[XOR][0] is _Null  # only once
         if obj in self._required:
@@ -238,6 +240,7 @@ class Parser:
     
     def _check_clumps(self, final):
         fin_set = set(final)
+        fin_names = {self._aliases.get(name, name) for name in fin_set}
         
         try:
             # OR
@@ -253,7 +256,8 @@ class Parser:
         except StopIteration:
             pass
         else:
-            raise ValueError("Expected no more than one of the following flags/arguments: '{}' (got '{}')".format("', '".join(names), "', '".join(fin_set & names)))
+            true_names = {self._aliases.get(name, name) for name in names}
+            raise ValueError("Expected no more than one of the following flags/arguments: '{}' (got '{}')".format("', '".join(names), "', '".join(fin_names & true_names)))
         
         try:
             # AND
@@ -261,13 +265,14 @@ class Parser:
         except StopIteration:
             pass
         else:
-            raise ValueError("Expected all of the following flags/arguments: '{}' (only got '{}')".format("', '".join(names), "', '".join(fin_set & names)))
+            true_names = {self._aliases.get(name, name) for name in names}
+            raise ValueError("Expected all of the following flags/arguments: '{}' (only got '{}')".format("', '".join(names), "', '".join(fin_names & true_names)))
         
         if self.p_used and self._required ^ self._got:
             # required
-            got = {i.__name__ for i in self._got}
+            got = {self._aliases.get(i.__name__, i.__name__) for i in self._got}
             required = {i.__name__ for i in self._required}
-            raise ValueError("Expected the following required flags/arguments: '{}' (only got '{}')".format("', '".join(required), "', '".join(fin_set & got)))
+            raise ValueError("Expected the following required flags/arguments: '{}' (only got '{}')".format("', '".join(required), "', '".join(fin_names & got)))
     
     def clump(self, *, OR=_Null, XOR=_Null, AND=_Null):
         def wrapper(cb):
@@ -298,8 +303,9 @@ class Parser:
         ret = self.__class__(*args, **kwargs)
         ret.__name__ = name
         ret.p_used = False
-        for name in [ret.__name__, *aliases]:
-            self.commands[name] = ret
+        self.commands[name] = ret
+        for alias in aliases:
+            self._aliases[alias] = name
         if OR is not _Null:
             self._or[OR].append(ret)
         if XOR is not _Null:
@@ -311,19 +317,22 @@ class Parser:
     def flag(self, dest=None, short=None, *, default=_Null, namespace={}, required=False):
         def wrapper(cb):
             sig: inspect.Signature = inspect.signature(cb)
-            _short = short if isinstance(short, str) else cb.__name__[0]
+            if dest:
+                self._aliases[cb.__name__] = dest
+            name = dest or cb.__name__
+            _short = short if isinstance(short, str) else name[0]
             cb.p_short = _short if _short and _short not in self.flags else None
             cb.p_namespace = namespace and FlagLocalNamespace(**namespace)
-            cb.p_args = list(sig.parameters.keys())[bool(namespace):]
+            cb.p_args = list(sig.parameters)[bool(namespace):]
             cb.p_nargs = len(sig.parameters) - bool(namespace)
             cb.p_used = False
             cb.p_required = required
             cb.p_or = cb.p_and = cb.p_xor = _Null
-            self.flags[cb.__name__] = cb
+            self.flags[name] = cb
             if default is not _Null:
-                self._defaults[cb.__name__] = default
+                self._defaults[name] = default
             if cb.p_short is not None:
-                self.flags[cb.p_short] = cb
+                self._aliases[cb.p_short] = name
             if required:
                 self._required.add(cb)
             return cb
@@ -382,6 +391,10 @@ class Group(Parser):
     @property
     def _groups(self):
         return self.parser._groups
+    
+    @property
+    def _aliases(self):
+        return self.parser._aliases
     
     def parse(self, *_):
         raise NotImplementedError('Groups cannot parse')
