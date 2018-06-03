@@ -28,8 +28,20 @@ def typecast(func):
     return wrapper
 
 
-class FlagLocalNamespace(SimpleNamespace):
-    pass
+def multiton(pos=None, *, kw):
+    def make_multiton(cls, *, classes={}):
+        if cls not in classes:
+            classes[cls] = {}
+        instances = classes[cls]
+        
+        @wraps(cls)
+        def getinstance(*args, **kwargs):
+            key = (args[:pos], kwargs) if kw else args[:pos]
+            if key not in instances:
+                instances[key] = cls(*args, **kwargs)
+            return instances[key]
+        return getinstance
+    return make_multiton
 
 
 class ErgoNamespace(SimpleNamespace):
@@ -38,3 +50,15 @@ class ErgoNamespace(SimpleNamespace):
     
     def __contains__(self, name):
         return hasattr(self, name)
+    
+    def __iter__(self):
+        yield from vars(self)
+    
+    def items(self):
+        return vars(self).items()
+    
+    def keys(self):
+        return vars(self).keys()
+    
+    def values(self):
+        return vars(self).values()
