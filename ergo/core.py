@@ -27,6 +27,7 @@ _Null = type(
 class Entity:
     def __init__(self, func, *, name=None, namespace=None):
         params = inspect.signature(func).parameters
+        self._args = ' '.join(map(str.upper, params))
         self.argcount = sys.maxsize if any(i.kind == 2 for i in params.values()) else len(params)
         self.func = func
         self.callback = typecast(func)
@@ -40,8 +41,73 @@ class Entity:
             return self.callback(*args, **kwargs)
         return self.callback(self.namespace, *args, **kwargs)
     
+    def __str__(self):
+        return "`{}'".format(self.name)
+    
     def clear_nsp(self):
         vars(self.namespace).clear()
+
+
+@multiton(cls=Entity, kw=False)
+class Flag(Entity.cls):
+    def __init__(self, *args, **kwargs):
+        self.short = None
+        super().__init__(*args, **kwargs)
+    
+    def __str__(self):
+        if self.short is None:
+            return '[--{} {}]'.format(self.name, self._args)
+        return '[-{} | --{} {}]'.format(self.short, self.name, self._args)
+
+
+class Helper:
+    @property
+    def all_commands(self):
+        return (*self.commands, *(name for g in self._groups for name in g.commands))
+    
+    @property
+    def all_flags(self):
+        return (*self.flags.values(), *(entity for g in self._groups for entity in g.flags.values()))
+    
+    @property
+    def all_args(self):
+        return self.args.values()
+    
+    @property
+    def usage(self):
+        return '{}{} {} {}'.format(
+          _FILE,
+          str(self),
+          ' '.join(map(str, self.all_flags)),
+          ' '.join(map(str, self.all_args)),
+          )
+    
+    @property
+    def help(self):
+        return '\n'.join(
+          '{}\n{}'.format(
+            label.upper(),
+            '\n'.join({
+              '\t{: <15} {}'.format(i.name, i.help)
+              for i in getattr(self, 'all_' + label)
+            }),
+          )
+          for label in ('args', 'flags')
+        )
+    
+    def format_help(self, usage=True, commands=True):
+        built = ['']
+        if usage:
+            built.append('usage: {}'.format(self.usage))
+        if commands and self.commands:
+            built.append('subcommands: {}'.format(','.join(map(str, self.all_commands))))
+        if usage or commands:
+            built.append('')
+        built.append(self.help)
+        return '\n'.join(built)
+    
+    def print_help(self, usage=True, commands=True):
+        print(self.format_help(usage, commands), end='\n\n')
 
 
 class _Handler:
@@ -128,24 +194,37 @@ class _Handler:
             # AND failure == member of an AND clump that was not given
             # an AND failure is okay if it's in a satisfied OR clump (i.e. there's at least one other OR in its clump that was given)
             # or if it's in a satisfied XOR clump (i.e. exactly one other XOR in its clump was given)
-            print(received, parsed)
             not_exempt = (all_failed - received) - OR_SUC - XOR_SUC
             if not_exempt:
-                raise ValueError('and: ' + ', '.join(map(repr, not_exempt)))
+                raise TypeError(
+                  'Expected all of the following flags/arguments: {}\nGot {}'.format(
+                      ', '.join(map(repr, all_failed)),
+                      ', '.join(map(repr, received)) or 'none'
+                    )
+                  )
         
         for all_failed, received in self.parent_or.failures(parsed):
             # OR failure == member of an OR clump where none were given
             # an OR failure is okay if it's in a satisfied XOR clump (i.e. exactly one other XOR in its clump was given)
             not_exempt = (all_failed - received) - XOR_SUC
             if not_exempt:
-                raise ValueError('or: ' + ', '.join(map(repr, not_exempt)))
+                raise TypeError(
+                  'Expected at least one of the following flags/arguments: {}\nGot none'.format(
+                      ', '.join(map(repr, received))
+                    )
+                  )
         
         for all_failed, not_received in self.parent_xor.failures(parsed):
             # XOR failure == member of an XOR clump that was given alongside at least one other
             # an XOR failure is okay if it satisfies an AND clump (i.e. all other ANDs in its clump were given)
             not_exempt = (all_failed - not_received) - AND_SUC - self._req_names
             if len(not_exempt) > 1:
-                raise ValueError('xor: ' + ', '.join(map(repr, not_exempt)))
+                raise TypeError(
+                  'Expected at most one of the following flags/arguments: {}\nGot {}'.format(
+                      ', '.join(map(repr, all_failed)),
+                      ', '.join(map(repr, all_failed - not_received))
+                    )
+                  )
         
         return True
     
@@ -167,9 +246,10 @@ class _Handler:
     
     def flag(self, dest=None, short=_Null, *, default=_Null, namespace=None, required=False):
         def inner(cb):
-            entity = Entity(cb, namespace=namespace, name=dest)
-            if short is not None:
-                self._aliases[short or entity.name[0]] = entity.name
+            entity = Flag(cb, namespace=namespace, name=dest)
+            if short is not None:  # _Null == default, None == none
+                entity.short = short or entity.name[0]
+                self._aliases[entity.short] = entity.name
             if dest is not None:
                 self._aliases[cb.__name__] = entity.name
             if default is not _Null:
@@ -189,7 +269,7 @@ class _Handler:
         return subparser
 
 
-class ParserBase(_Handler):
+class ParserBase(_Handler, Helper):
     def __init__(self, flag_prefix='-'):
         self.flag_prefix = flag_prefix
         self.long_prefix = 2 * flag_prefix
@@ -250,7 +330,7 @@ class ParserBase(_Handler):
         
         return [*flags.big, *flags.small], args
     
-    def parse(self, inp=None, *, flargs=None):
+    def do_parse(self, inp=None, *, flargs=None):
         consumeds = set()
         parsed = {}
         flags, positionals = self._extract_flargs(inp) if flargs is None else flargs
@@ -266,14 +346,22 @@ class ParserBase(_Handler):
         for idx, (value, (name, arg)) in enumerate(zip(positionals, self.args.items())):
             consumeds.add(idx)
             if self.hascmd(value):
-                parsed[self._aliases.get(value, value)] = self.getcmd(value).parse(flargs=(flags, positionals))
+                parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(flargs=(flags, positionals))
                 continue
             parsed[name] = arg(value)
         positionals[:] = [v for i, v in enumerate(positionals) if i not in consumeds]
         
         self.enforce_clumps(parsed)
+        # FIXME: This is pretty bad
         parsed = {self._aliases.get(k, k) if self.hasany(k) else next(g._aliases.get(k, k) for g in self._groups if g.hasany(k)): v for k, v in parsed.items()}
         return ErgoNamespace(**{**self._defaults, **parsed})
+    
+    def parse(self, inp=None):
+        try:
+            return self.do_parse(inp)
+        except TypeError as e:
+            self.print_help()
+            raise SystemExit(e if str(e) else type(e))
     
     def group(self, name, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
         if name in vars(self):
@@ -324,10 +412,16 @@ class Subparser(SubHandler, ParserBase):
     def __init__(self, flag_prefix='-', *, parent, name):
         SubHandler.__init__(self, parent, name)
         ParserBase.__init__(self, flag_prefix)
-
+    
+    def __str__(self):
+        return ' {}'.format(self.name)
+    
 
 class Parser(ParserBase):
     def parse(self, inp=sys.argv[1:]):
         if isinstance(inp, str):
             inp = shlex.split(inp)
         return super().parse(list(inp))  # copy input
+    
+    def __str__(self):
+        return ''
