@@ -7,27 +7,51 @@ class _Clump:
         self.host = host
         self.members = set()
     
+    def __repr__(self):
+        return repr(set(self.member_names))
+    
     @property
-    def _member_names(self) -> set:
-        return {i.name for i in self.members}
+    def member_names(self):
+        return frozenset(i.name for i in self.members)
     
     def add(self, item):
         self.members.add(item)
 
 
+class ClumpGroup(set):
+    def successes(self, parsed):
+        return ((c.member_names, c.to_eliminate(parsed)) for c in self if c.verify(parsed))
+    
+    def failures(self, parsed):
+        return ((c.member_names, c.to_eliminate(parsed)) for c in self if not c.verify(parsed))
+
+
 @multiton(kw=False)
 class And(_Clump):
-    def verify(self, parsed) -> set:
-        return self._member_names.difference(parsed)
+    def verify(self, parsed):
+        # this should contain either no members or all members (latter indicating none were given)
+        r = self.member_names.difference(parsed)
+        return not r or parsed == r
+    
+    def to_eliminate(self, parsed):  # received
+        return frozenset(self.member_names.difference(parsed))
 
 
 @multiton(kw=False)
 class Or(_Clump):
-    def verify(self, parsed) -> bool:
-        return bool(self._member_names.union(parsed))
+    def verify(self, parsed):
+        # this should contain at least 1 member
+        return bool(self.member_names.union(parsed))
+    
+    def to_eliminate(self, parsed):  # received
+        return frozenset(self.member_names.intersection(parsed))
 
 
 @multiton(kw=False)
 class Xor(_Clump):
-    def verify(self, parsed) -> bool:
-        return bool(self._member_names.symmetric_difference(parsed))
+    def verify(self, parsed):
+        # this should contain exactly 1 member
+        return 1 == len(self.member_names.intersection(parsed))
+    
+    def to_eliminate(self, parsed):  # not received
+        return frozenset(self.member_names.difference(parsed))

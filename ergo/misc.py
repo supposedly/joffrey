@@ -45,11 +45,14 @@ def multiton(pos=None, *, kw):
 
 
 class ErgoNamespace(SimpleNamespace):
-    def __getitem__(self, name):
-        return self.__getattribute__(name)
+    def __bool__(self):
+        return bool(vars(self))
     
     def __contains__(self, name):
         return hasattr(self, name)
+    
+    def __getitem__(self, name):
+        return self.__getattribute__(name)
     
     def __iter__(self):
         yield from vars(self)
