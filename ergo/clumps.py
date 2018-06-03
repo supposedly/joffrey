@@ -8,7 +8,7 @@ class _Clump:
         self.members = set()
     
     def __repr__(self):
-        return repr(set(self.member_names))
+        return '{}({!r})'.format(self.__class__.__name__, tuple(self.member_names))
     
     @property
     def member_names(self):
@@ -20,7 +20,7 @@ class _Clump:
 
 class ClumpGroup(set):
     def successes(self, parsed):
-        return ((c.member_names, c.to_eliminate(parsed)) for c in self if c.verify(parsed))
+        return (name for c in self if c.verify(parsed) for name in c.member_names)
     
     def failures(self, parsed):
         return ((c.member_names, c.to_eliminate(parsed)) for c in self if not c.verify(parsed))
@@ -34,7 +34,7 @@ class And(_Clump):
         return not r or parsed == r
     
     def to_eliminate(self, parsed):  # received
-        return frozenset(self.member_names.difference(parsed))
+        return frozenset(self.member_names.intersection(parsed))
 
 
 @multiton(kw=False)

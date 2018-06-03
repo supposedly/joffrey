@@ -68,6 +68,18 @@ class _Handler:
           )
     
     @property
+    def parent_and(self):
+        return self._and
+    
+    @property
+    def parent_or(self):
+        return self._or
+    
+    @property
+    def parent_xor(self):
+        return self._xor
+    
+    @property
     def _req_names(self):
         return {e.name for e in self._required}
     
@@ -108,30 +120,30 @@ class _Handler:
     
     def enforce_clumps(self, parsed):
         parsed = {self._aliases.get(i, i) for i in parsed}
-        AND_SUC = set(self._and.successes(parsed))
-        OR_SUC = set(self._or.successes(parsed))
-        XOR_SUC = set(self._xor.successes(parsed))
+        AND_SUC = set(self.parent_and.successes(parsed))
+        OR_SUC = set(self.parent_or.successes(parsed))
+        XOR_SUC = set(self.parent_xor.successes(parsed))
         
-        for all_failed, received in self._and.failures(parsed):
+        for all_failed, received in self.parent_and.failures(parsed):
             # AND failure == member of an AND clump that was not given
             # an AND failure is okay if it's in a satisfied OR clump (i.e. there's at least one other OR in its clump that was given)
             # or if it's in a satisfied XOR clump (i.e. exactly one other XOR in its clump was given)
-            not_exempt = all_failed - received - OR_SUC - XOR_SUC
+            print(received, parsed)
+            not_exempt = (all_failed - received) - OR_SUC - XOR_SUC
             if not_exempt:
                 raise ValueError('and: ' + ', '.join(map(repr, not_exempt)))
         
-        for all_failed, received in self._or.failures(parsed):
+        for all_failed, received in self.parent_or.failures(parsed):
             # OR failure == member of an OR clump where none were given
             # an OR failure is okay if it's in a satisfied XOR clump (i.e. exactly one other XOR in its clump was given)
-            not_exempt = all_failed - received - XOR_SUC
+            not_exempt = (all_failed - received) - XOR_SUC
             if not_exempt:
                 raise ValueError('or: ' + ', '.join(map(repr, not_exempt)))
         
-        for all_failed, not_received in self._xor.failures(parsed):
+        for all_failed, not_received in self.parent_xor.failures(parsed):
             # XOR failure == member of an XOR clump that was given alongside at least one other
             # an XOR failure is okay if it satisfies an AND clump (i.e. all other ANDs in its clump were given)
-            # or if it's required
-            not_exempt = all_failed - not_received - AND_SUC - self._req_names
+            not_exempt = (all_failed - not_received) - AND_SUC - self._req_names
             if len(not_exempt) > 1:
                 raise ValueError('xor: ' + ', '.join(map(repr, not_exempt)))
         
@@ -162,7 +174,6 @@ class _Handler:
                 self._aliases[cb.__name__] = entity.name
             if default is not _Null:
                 self._defaults[entity.name] = default
-                required = True
             if required:
                 self._required.add(entity)
             self.flags[entity.name] = entity
@@ -170,19 +181,12 @@ class _Handler:
         return inner
     
     def command(self, name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, **kwargs):
-        subparser = Subparser(*args, **kwargs, name=name)
+        subparser = Subparser(*args, **kwargs, parent=self, name=name)
         for alias in aliases:
             self._aliases[alias] = name
         self._clump(subparser, AND, OR, XOR)
         self.commands[name] = subparser
         return subparser
-
-
-class Group(_Handler):
-    def __init__(self, name):
-        self.name = name
-        self.AND = self.OR = self.XOR = _Null
-        super().__init__()
 
 
 class ParserBase(_Handler):
@@ -210,7 +214,8 @@ class ParserBase(_Handler):
         return super().hasflag(name) or super().hascmd(name) or name in self.args or self._aliases.get(name, _Null) in self.args
     
     def enforce_clumps(self, parsed):
-        p = {self._aliases.get(i, i) if self.hasany(i) else next(g.name for g in self._groups if g.hasany(i)) for i in parsed}
+        p = {next((g.name for g in self._groups if g.hasany(i)), self._aliases.get(i, i)) for i in parsed}
+        self.p = p
         return super().enforce_clumps(p) and all(g.enforce_clumps(parsed) for g in self._groups)
     
     def _extract_flargs(self, inp):
@@ -260,21 +265,22 @@ class ParserBase(_Handler):
         consumeds.clear()
         for idx, (value, (name, arg)) in enumerate(zip(positionals, self.args.items())):
             consumeds.add(idx)
-            if self._aliases.get(value, value) in self.commands:
-                parsed.update(self.getcmd(value).parse(flargs=(flags, positionals)))
+            if self.hascmd(value):
+                parsed[self._aliases.get(value, value)] = self.getcmd(value).parse(flargs=(flags, positionals))
                 continue
             parsed[name] = arg(value)
         positionals[:] = [v for i, v in enumerate(positionals) if i not in consumeds]
         
         self.enforce_clumps(parsed)
-        return ErgoNamespace(**self._defaults, **parsed)
+        parsed = {self._aliases.get(k, k) if self.hasany(k) else next(g._aliases.get(k, k) for g in self._groups if g.hasany(k)): v for k, v in parsed.items()}
+        return ErgoNamespace(**{**self._defaults, **parsed})
     
     def group(self, name, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
         if name in vars(self):
             raise ValueError('Group name already in use for this parser: ' + name)
         if iskeyword(name) or not name.isidentifier():
             raise ValueError('Invalid group name: ' + name)
-        group = Group(name)
+        group = Group(self, name)
         if required:
             self._required.add(group)
         self._clump(group, AND, OR, XOR)
@@ -283,15 +289,45 @@ class ParserBase(_Handler):
         return group
 
 
+class SubHandler(_Handler):
+    def __init__(self, parent, name):
+        self.name = name
+        self.parent = parent
+        self.AND = self.OR = self.XOR = _Null
+        super().__init__()
+    
+    @property
+    def parent_and(self):
+        return ClumpGroup({*self._and, *self.parent.parent_and})
+    
+    @property
+    def parent_or(self):
+        return ClumpGroup({*self._or, *self.parent.parent_or})
+    
+    @property
+    def parent_xor(self):
+        return ClumpGroup({*self._xor, *self.parent.parent_xor})
+
+
+class Group(SubHandler):
+    def arg(self, required=False):
+        def inner(cb):
+            entity = Entity(cb)
+            if required:
+                self._required.add(entity)
+            self.args[entity.name] = entity
+            return self.parent.arg(required)(entity.func)
+        return inner
+
+
+class Subparser(SubHandler, ParserBase):
+    def __init__(self, flag_prefix='-', *, parent, name):
+        SubHandler.__init__(self, parent, name)
+        ParserBase.__init__(self, flag_prefix)
+
+
 class Parser(ParserBase):
-    def parse(self, inp=sys.argv):
+    def parse(self, inp=sys.argv[1:]):
         if isinstance(inp, str):
             inp = shlex.split(inp)
         return super().parse(list(inp))  # copy input
-
-
-class Subparser(ParserBase):
-    def __init__(self, flag_prefix='-', *, name):
-        self.name = name
-        self.AND = self.OR = self.XOR = _Null
-        super().__init__(flag_prefix)
