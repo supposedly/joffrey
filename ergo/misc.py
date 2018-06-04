@@ -28,24 +28,28 @@ def typecast(func):
     return wrapper
 
 
-def multiton(pos=None, *, kw, cls=None):
-    class_ = cls
+class multiton:
+    classes = {}
     
-    def make_multiton(deco_cls, *, classes={}):
-        cls = class_ or deco_cls
-        if cls not in classes:
-            classes[cls] = {}
-        instances = classes[cls]
+    def __init__(self, pos=None, *, kw, cls=None):
+        self.class_ = cls
+        self.kw = kw
+        self.pos = pos
+    
+    def __call__(self, deco_cls, *, classes={}):
+        cls = self.class_ or deco_cls
+        if cls not in self.classes:
+            self.classes[cls] = {}
+        instances = self.classes[cls]
         
         @wraps(deco_cls)
         def getinstance(*args, **kwargs):
-            key = (args[:pos], kwargs) if kw else args[:pos]
+            key = (args[:self.pos], kwargs) if self.kw else args[:self.pos]
             if key not in instances:
                 instances[key] = deco_cls(*args, **kwargs)
             return instances[key]
         getinstance.cls = deco_cls
         return getinstance
-    return make_multiton
 
 
 class ErgoNamespace(SimpleNamespace):

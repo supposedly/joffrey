@@ -6,6 +6,7 @@ import inspect
 import os
 import sys
 import shlex
+from itertools import islice
 from keyword import iskeyword
 from types import SimpleNamespace
 
@@ -27,7 +28,7 @@ _Null = type(
 class Entity:
     def __init__(self, func, *, name=None, namespace=None):
         params = inspect.signature(func).parameters
-        self._args = ' '.join(map(str.upper, params))
+        self._args = ' '.join(islice(map(str.upper, params), bool(namespace), None))
         self.argcount = sys.maxsize if any(i.kind == 2 for i in params.values()) else len(params)
         self.func = func
         self.callback = typecast(func)
@@ -48,16 +49,17 @@ class Entity:
         vars(self.namespace).clear()
 
 
-@multiton(cls=Entity, kw=False)
+@multiton(cls=Entity.cls, kw=False)
 class Flag(Entity.cls):
     def __init__(self, *args, **kwargs):
         self.short = None
         super().__init__(*args, **kwargs)
     
     def __str__(self):
+        space = ' ' if self._args else ''
         if self.short is None:
-            return '[--{} {}]'.format(self.name, self._args)
-        return '[-{} | --{} {}]'.format(self.short, self.name, self._args)
+            return '[--{}{s}{}]'.format(self.name, self._args, s=space)
+        return '[-{} | --{}{s}{}]'.format(self.short, self.name, self._args, s=space)
 
 
 class Helper:
@@ -115,7 +117,7 @@ class _Handler:
         self.args = {}
         self.commands = {}
         self.flags = {}
-        self._aliases = {}
+        self.aliases = {}
         self._defaults = {}
         
         self._and = ClumpGroup()
@@ -153,22 +155,22 @@ class _Handler:
         try:
             return self.flags[name]
         except KeyError:
-            return self.flags[self._aliases[name]]
+            return self.flags[self.aliases[name]]
     
     def hasflag(self, name):
-        return name in self.flags or self._aliases.get(name, _Null) in self.flags
+        return name in self.flags or self.aliases.get(name, _Null) in self.flags
     
     def getcmd(self, name):
         try:
             return self.commands[name]
         except KeyError:
-            return self.commands[self._aliases[name]]
+            return self.commands[self.aliases[name]]
     
     def hascmd(self, name):
-        return name in self.commands or self._aliases.get(name, _Null) in self.commands
+        return name in self.commands or self.aliases.get(name, _Null) in self.commands
     
     def hasany(self, name):
-        return self.hasflag(name) or self.hascmd(name) or name in self.args or self._aliases.get(name, _Null) in self.args
+        return self.hasflag(name) or self.hascmd(name) or name in self.args or self.aliases.get(name, _Null) in self.args
     
     def _clump(self, obj, AND, OR, XOR):
         obj.AND = AND
@@ -185,7 +187,7 @@ class _Handler:
             Xor(XOR, self).add(obj)
     
     def enforce_clumps(self, parsed):
-        parsed = {self._aliases.get(i, i) for i in parsed}
+        parsed = {self.aliases.get(i, i) for i in parsed}
         AND_SUC = set(self.parent_and.successes(parsed))
         OR_SUC = set(self.parent_or.successes(parsed))
         XOR_SUC = set(self.parent_xor.successes(parsed))
@@ -247,11 +249,11 @@ class _Handler:
     def flag(self, dest=None, short=_Null, *, default=_Null, namespace=None, required=False):
         def inner(cb):
             entity = Flag(cb, namespace=namespace, name=dest)
+            if dest is not None:
+                self.aliases[cb.__name__] = entity.name
             if short is not None:  # _Null == default, None == none
                 entity.short = short or entity.name[0]
-                self._aliases[entity.short] = entity.name
-            if dest is not None:
-                self._aliases[cb.__name__] = entity.name
+                self.aliases[entity.short] = entity.name
             if default is not _Null:
                 self._defaults[entity.name] = default
             if required:
@@ -263,7 +265,7 @@ class _Handler:
     def command(self, name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, **kwargs):
         subparser = Subparser(*args, **kwargs, parent=self, name=name)
         for alias in aliases:
-            self._aliases[alias] = name
+            self.aliases[alias] = name
         self._clump(subparser, AND, OR, XOR)
         self.commands[name] = subparser
         return subparser
@@ -291,10 +293,10 @@ class ParserBase(_Handler, Helper):
         return super().hasflag(name) or any(g.hasflag(name) for g in self._groups)
     
     def hasany(self, name):
-        return super().hasflag(name) or super().hascmd(name) or name in self.args or self._aliases.get(name, _Null) in self.args
+        return super().hasflag(name) or super().hascmd(name) or name in self.args or self.aliases.get(name, _Null) in self.args
     
     def enforce_clumps(self, parsed):
-        p = {next((g.name for g in self._groups if g.hasany(i)), self._aliases.get(i, i)) for i in parsed}
+        p = {next((g.name for g in self._groups if g.hasany(i)), self.aliases.get(i, i)) for i in parsed}
         self.p = p
         return super().enforce_clumps(p) and all(g.enforce_clumps(parsed) for g in self._groups)
     
@@ -346,14 +348,14 @@ class ParserBase(_Handler, Helper):
         for idx, (value, (name, arg)) in enumerate(zip(positionals, self.args.items())):
             consumeds.add(idx)
             if self.hascmd(value):
-                parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(flargs=(flags, positionals))
+                parsed[self.aliases.get(value, value)] = self.getcmd(value).do_parse(flargs=(flags, positionals))
                 continue
             parsed[name] = arg(value)
         positionals[:] = [v for i, v in enumerate(positionals) if i not in consumeds]
         
         self.enforce_clumps(parsed)
         # FIXME: This is pretty bad
-        parsed = {self._aliases.get(k, k) if self.hasany(k) else next(g._aliases.get(k, k) for g in self._groups if g.hasany(k)): v for k, v in parsed.items()}
+        parsed = {self.aliases.get(k, k) if self.hasany(k) else next(g.aliases.get(k, k) for g in self._groups if g.hasany(k)): v for k, v in parsed.items()}
         return ErgoNamespace(**{**self._defaults, **parsed})
     
     def parse(self, inp=None):
@@ -386,15 +388,15 @@ class SubHandler(_Handler):
     
     @property
     def parent_and(self):
-        return ClumpGroup({*self._and, *self.parent.parent_and})
+        return ClumpGroup(self.aliases.get(i, i) for i in {*self._and, *self.parent.parent_and})
     
     @property
     def parent_or(self):
-        return ClumpGroup({*self._or, *self.parent.parent_or})
+        return ClumpGroup(self.aliases.get(i, i) for i in {*self._or, *self.parent.parent_or})
     
     @property
     def parent_xor(self):
-        return ClumpGroup({*self._xor, *self.parent.parent_xor})
+        return ClumpGroup(self.aliases.get(i, i) for i in {*self._xor, *self.parent.parent_xor})
 
 
 class Group(SubHandler):
