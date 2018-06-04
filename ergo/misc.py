@@ -19,6 +19,8 @@ def typecast(func):
         # Assign default to handle **kwargs annotation if not given/callable
         if not callable(kw_annot.get(None)):
             kw_annot[None] = lambda x: x
+        if len(args) < len(pos_annot):
+            raise TypeError("{}() expected at least {} arguments, got {}".format(func.__name__, len(pos_annot), len(args)))
         # zip_longest to account for any var_positional argument
         fill = zip_longest(pos_annot, args, fillvalue=pos_annot[-1] if pos_annot else None)
         return func(

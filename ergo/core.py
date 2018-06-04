@@ -333,6 +333,10 @@ class ParserBase(_Handler, Helper):
         return [*flags.big, *flags.small], args
     
     def do_parse(self, inp=None, *, flargs=None):
+        if any(i == '{}help'.format(self.long_prefix) or i.startswith(self.flag_prefix) and 'h' in i for i in inp):
+            self.print_help()
+            raise SystemExit('\n')
+        
         consumeds = set()
         parsed = {}
         flags, positionals = self._extract_flargs(inp) if flargs is None else flargs
@@ -358,7 +362,7 @@ class ParserBase(_Handler, Helper):
         parsed = {self.aliases.get(k, k) if self.hasany(k) else next(g.aliases.get(k, k) for g in self._groups if g.hasany(k)): v for k, v in parsed.items()}
         return ErgoNamespace(**{**self._defaults, **parsed})
     
-    def parse(self, inp=None):
+    def parse(self, inp):
         try:
             return self.do_parse(inp)
         except TypeError as e:
