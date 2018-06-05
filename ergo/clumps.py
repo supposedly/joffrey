@@ -41,7 +41,7 @@ class And(_Clump):
 class Or(_Clump):
     def verify(self, parsed):
         # this should contain at least 1 member
-        return bool(self.member_names.union(parsed))
+        return bool(self.member_names.intersection(parsed))
     
     def to_eliminate(self, parsed):  # received
         return frozenset(self.member_names.intersection(parsed))
