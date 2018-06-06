@@ -60,3 +60,9 @@ def test_systemexit_still_works__just_in_case_yknow():
     with pytest.raises(SystemExit):
         parser.systemexit = True
         parser.parse('foo --add 1 2 -S "ahh" -v')
+
+
+def test_namespaces_stateless():
+    first = parser.parse('foo -S a -vvvv')
+    second = parser.parse('foo -vvvv -S a')
+    assert first.verbosity == second.verbosity == 4

@@ -6,6 +6,7 @@ import inspect
 import os
 import sys
 import shlex
+from itertools import chain
 from keyword import iskeyword
 from types import SimpleNamespace
 
@@ -34,6 +35,7 @@ class Entity:
         self.help = func.__doc__
         self.name = name or func.__name__
         self.namespace = None if namespace is None else SimpleNamespace(**namespace)
+        self._nsp = namespace
         self.AND = self.OR = self.XOR = _Null
     
     def __call__(self, *args, **kwargs):
@@ -45,7 +47,9 @@ class Entity:
         return "`{}'".format(self.name)
     
     def clear_nsp(self):
-        vars(self.namespace).clear()
+        if self.namespace is not None:
+            vars(self.namespace).clear()
+            vars(self.namespace).update(self._nsp)
 
 
 @multiton(cls=Entity.cls, kw=False)
@@ -336,6 +340,12 @@ class ParserBase(_Handler, HelperMixin):
         
         return flags, args
     
+    def _clear_namespaces(self):
+        for entity in chain(self.flags.values(), self.args.values()):
+            entity.clear_nsp()
+        for entity in (e for g in self._groups for e in chain(g.flags.values(), g.args.values(), g.commands.values())):
+            entity.clear_nsp()
+    
     def do_parse(self, inp=None, *, flargs=None):
         parsed = {}
         flags, positionals = self._extract_flargs(inp) if flargs is None else flargs
@@ -382,6 +392,8 @@ class ParserBase(_Handler, HelperMixin):
                 self.print_help()
                 raise SystemExit(e if str(e) else type(e))
             raise
+        finally:
+            self._clear_namespaces()
     
     def group(self, name, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
         if name in vars(self):
@@ -406,15 +418,15 @@ class SubHandler(_Handler):
     
     @property
     def parent_and(self):
-        return ClumpGroup(self._aliases.get(i, i) for i in {*self._and, *self.parent.parent_and})
+        return ClumpGroup(self._aliases.get(i, i) for i in chain(self._and, self.parent.parent_and))
     
     @property
     def parent_or(self):
-        return ClumpGroup(self._aliases.get(i, i) for i in {*self._or, *self.parent.parent_or})
+        return ClumpGroup(self._aliases.get(i, i) for i in chain(self._or, self.parent.parent_or))
     
     @property
     def parent_xor(self):
-        return ClumpGroup(self._aliases.get(i, i) for i in {*self._xor, *self.parent.parent_xor})
+        return ClumpGroup(self._aliases.get(i, i) for i in chain(self._xor, self.parent.parent_xor))
 
 
 class Group(SubHandler):
