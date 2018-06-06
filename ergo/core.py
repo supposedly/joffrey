@@ -10,7 +10,7 @@ from itertools import islice
 from keyword import iskeyword
 from types import SimpleNamespace
 
-from .misc import multiton, typecast, ErgoNamespace
+from .misc import multiton, ErgoNamespace
 from .clumps import And, Or, Xor, ClumpGroup
 
 
@@ -26,14 +26,11 @@ _Null = type(
 
 @multiton(kw=False)
 class Entity:
-    cls: None  # so pylint stops complaining about Entity.cls
-    
     def __init__(self, func, *, name=None, namespace=None):
         params = inspect.signature(func).parameters
         self._args = ' '.join(islice(map(str.upper, params), bool(namespace), None))
         self.argcount = sys.maxsize if any(i.kind == 2 for i in params.values()) else len(params) - bool(namespace)
-        self.func = func
-        self.callback = typecast(func)
+        self.callback = func
         self.help = func.__doc__
         self.name = name or func.__name__
         self.namespace = None if namespace is None else SimpleNamespace(**namespace)
@@ -236,7 +233,7 @@ class _Handler:
     
     def clump(self, *, AND=_Null, OR=_Null, XOR=_Null):
         def inner(cb):
-            entity = Entity(getattr(cb, 'func', cb))
+            entity = Entity(cb.callback if isinstance(cb, Entity.cls) else cb)
             self._clump(entity, AND, OR, XOR)
             return entity
         return inner
@@ -304,7 +301,7 @@ class ParserBase(_Handler, HelperMixin):
     
     def enforce_clumps(self, parsed):
         p = {*parsed, *{next((g.name for g in self._groups if g.hasany(i)), None) for i in parsed}} - {None}
-        return super().enforce_clumps(p) and all(g.enforce_clumps(parsed) for g in self._groups)
+        return super().enforce_clumps(p) and all(g.enforce_clumps(parsed) for g in self._groups if g.name in p)
     
     def _extract_flargs(self, inp):
         flags = []
@@ -415,7 +412,7 @@ class Group(SubHandler):
             if required:
                 self._required.add(entity)
             self.args[entity.name] = entity
-            return self.parent.arg(required)(entity.func)
+            return self.parent.arg(required)(entity.callback)
         return inner
 
 

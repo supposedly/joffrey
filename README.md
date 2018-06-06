@@ -35,9 +35,9 @@ def verbose(nsp):
 
 @parser.clump(XOR=0)  # this flag *cannot* appear alongside any in group `sc` (same XOR)
 @parser.flag('addition')
-def add(a: int, b: int = 0):  # can also provide default args if needed
+def add(a=0, *b):  # can also provide default args if needed
     """Who needs a calculator"""
-    return a + b
+    return int(a) + sum(map(int, b))
 ```
 ```py
 >>> parser.parse('foo -S "test test" -vvvv')  # input will be shlex.split if given as a string (defaults to sys.argv though)
@@ -53,7 +53,7 @@ Expected no more than one of the following flags/arguments: 'scream', 'add', 've
 >>> # etc
 ```
 
-The only things not deco-based are "groups" and "commands" -- commands are basically sub-parsers (argparse's subcommands) and groups are so you can do `mygroup = parser.add_group(AND=blah, OR=blah, XOR=blah)` and then `@mygroup.flag`/`.arg` (rather than `@parser.flag`/`.arg`); those clump settings apply to the whole group rather than to each flag/arg within it.
+The only things not deco-based are "groups" and "commands" -- commands are basically sub-parsers (argparse's subcommands) and groups are so you can do `parser.add_group('name', AND=blah, OR=blah, XOR=blah)` and then `@parser.name.flag`/`.arg` (rather than `@parser.flag`/`.arg`); those clump settings apply to the whole group rather than to each flag/arg within it.
 
 ```py
 parser = Parser()
