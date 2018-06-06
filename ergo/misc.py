@@ -33,6 +33,9 @@ class ErgoNamespace(SimpleNamespace):
     def __contains__(self, name):
         return hasattr(self, name)
     
+    def __eq__(self, other):
+        return vars(self) == other
+    
     def __getitem__(self, name):
         return self.__getattribute__(name)
     

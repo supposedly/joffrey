@@ -6,10 +6,10 @@ import inspect
 import os
 import sys
 import shlex
-from itertools import islice
 from keyword import iskeyword
 from types import SimpleNamespace
 
+from . import errors
 from .misc import multiton, ErgoNamespace
 from .clumps import And, Or, Xor, ClumpGroup
 
@@ -28,7 +28,7 @@ _Null = type(
 class Entity:
     def __init__(self, func, *, name=None, namespace=None):
         params = inspect.signature(func).parameters
-        self._args = ' '.join(islice(map(str.upper, params), bool(namespace), None))
+        self._args = ' '.join([i.upper() for i in params][bool(namespace):])
         self.argcount = sys.maxsize if any(i.kind == 2 for i in params.values()) else len(params) - bool(namespace)
         self.callback = func
         self.help = func.__doc__
@@ -127,9 +127,9 @@ class _Handler:
     
     def __repr__(self):
         quote = "'" if hasattr(self, 'name') else ''
-        return '<{c}{s}{q}{n}{q}>'.format(
-          c=self.__class__.__name__,
-          n=getattr(self, 'name', ''),
+        return '<{}{s}{q}{}{q}>'.format(
+          self.__class__.__name__,
+          getattr(self, 'name', ''),
           s=' ' if hasattr(self, 'name') else '',
           q=quote,
           )
@@ -199,7 +199,7 @@ class _Handler:
             # or if it's in a satisfied XOR clump (i.e. exactly one other XOR in its clump was given)
             not_exempt = (all_failed - received) - OR_SUC - XOR_SUC
             if not_exempt:
-                raise TypeError(
+                raise errors.ANDError(
                   'Expected all of the following flags/arguments: {}\nGot {}'.format(
                       ', '.join(map(repr, all_failed)),
                       ', '.join(map(repr, received)) or 'none'
@@ -211,7 +211,7 @@ class _Handler:
             # an OR failure is okay if it's in a satisfied XOR clump (i.e. exactly one other XOR in its clump was given)
             not_exempt = (all_failed - received) - XOR_SUC
             if not_exempt:
-                raise TypeError(
+                raise errors.ORError(
                   'Expected at least one of the following flags/arguments: {}\nGot none'.format(
                       ', '.join(map(repr, all_failed))
                     )
@@ -222,7 +222,7 @@ class _Handler:
             # an XOR failure is okay if it satisfies an AND clump (i.e. all other ANDs in its clump were given)
             not_exempt = (all_failed - not_received) - AND_SUC - self._req_names
             if len(not_exempt) > 1:
-                raise TypeError(
+                raise errors.XORError(
                   'Expected no more than one of the following flags/arguments: {}\nGot {}'.format(
                       ', '.join(map(repr, all_failed)),
                       ', '.join(map(repr, all_failed - not_received))
@@ -264,7 +264,7 @@ class _Handler:
         return inner
     
     def command(self, name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, **kwargs):
-        subparser = Subparser(*args, **kwargs, parent=self, name=name)
+        subparser = Subparser(*args, **kwargs, name=name, parent=self)
         for alias in aliases:
             self._aliases[alias] = name
         self._clump(subparser, AND, OR, XOR)
@@ -273,9 +273,10 @@ class _Handler:
 
 
 class ParserBase(_Handler, HelperMixin):
-    def __init__(self, flag_prefix='-'):
+    def __init__(self, flag_prefix='-', systemexit=True):
         self.flag_prefix = flag_prefix
         self.long_prefix = 2 * flag_prefix
+        self.systemexit = systemexit
         self._groups = set()
         super().__init__()
     
@@ -336,7 +337,6 @@ class ParserBase(_Handler, HelperMixin):
         return flags, args
     
     def do_parse(self, inp=None, *, flargs=None):
-        
         parsed = {}
         flags, positionals = self._extract_flargs(inp) if flargs is None else flargs
         
@@ -353,23 +353,35 @@ class ParserBase(_Handler, HelperMixin):
         flags[:] = [v for i, v in enumerate(flags) if i not in consumed]
         
         consumed.clear()
+        for idx, value in enumerate(positionals):
+            if self.hascmd(value):
+                used, parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(
+                  flargs=(flags, positionals[1+idx:])
+                  )
+                consumed.update(map((1 + idx).__add__, used | {-1}))
+        positionals[:] = [v for i, v in enumerate(positionals) if i not in consumed]
+        used = consumed
+        
+        consumed.clear()
         for idx, (value, (name, arg)) in enumerate(zip(positionals, self.args.items())):
             consumed.add(idx)
-            if self.hascmd(value):
-                parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(flargs=(flags, positionals))
-                continue
             parsed[name] = arg(value)
         positionals[:] = [v for i, v in enumerate(positionals) if i not in consumed]
         
         self.enforce_clumps(parsed)
-        return ErgoNamespace(**{**self._defaults, **parsed})
+        nsp = ErgoNamespace(**{**self._defaults, **parsed})
+        if flargs is None:
+            return nsp
+        return used, nsp
     
-    def parse(self, inp):
+    def parse(self, inp, *, systemexit=None):
         try:
             return self.do_parse(inp)
         except Exception as e:
-            self.print_help()
-            raise SystemExit(e if str(e) else type(e))
+            if systemexit is None and self.systemexit or systemexit:
+                self.print_help()
+                raise SystemExit(e if str(e) else type(e))
+            raise
     
     def group(self, name, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
         if name in vars(self):
@@ -426,10 +438,10 @@ class Subparser(SubHandler, ParserBase):
     
 
 class Parser(ParserBase):
-    def parse(self, inp=sys.argv[1:]):
+    def parse(self, inp=sys.argv[1:], **kwargs):
         if isinstance(inp, str):
             inp = shlex.split(inp)
-        return super().parse(list(inp))  # copy input
+        return super().parse(list(inp), **kwargs)  # inp.copy()
     
     def __str__(self):
         return ''
