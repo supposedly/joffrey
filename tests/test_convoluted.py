@@ -46,21 +46,40 @@ def transition(tr):
     return tr
 
 
-@preview.flag(short='n', default='Moore')
-def neighborhood(value):
+@preview.flag(short='n', default='eh')
+def first(value):
     return value
 
 
 @preview.flag(short='o', default='?')
-def states(num):
+def state(num):
     return str(num)
 
 
 def test_no_and_failure():
     """This used to not work"""
-    parser.parse('one -f 10')
+    parser.parse('foo -f 10')
 
 
-def test_or_failure():
-    with pytest.raises(errors.ErgoException):
+def test_clump_failures():
+    with pytest.raises(errors.RequirementError):
         parser.parse('-f 10')
+    with pytest.raises(errors.ANDError):
+        parser.parse('foo -t')
+    with pytest.raises(errors.ORError):
+        parser.parse('foo -tf 10')  # not XORError because grp_0 is parsed first
+
+
+def test_subparser_clump_failure():
+    with pytest.raises(errors.XORError):
+        parser.parse('foo -t 10 preview 10')
+
+
+def test_ok():
+    parser.parse('foo preview 10')
+    parser.parse('foo bar -t')
+
+
+def test_subparser_flag_with_argument():
+    done = parser.parse('foo preview 20 -o None')
+    assert done.preview == {'transition': '20', 'state': 'None', 'first': 'eh'}

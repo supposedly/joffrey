@@ -31,23 +31,30 @@ def integer(string):
     return int(string)
 
 
+try:
+    print(parser.parse())
+except Exception as e:
+    pass
+
+
 def test_ok_1():
     done = parser.parse('test')
     assert done.name == 'test'
 
 
-def test_correct_subparser_delegation():
+def test_subparser_consumes_everything():
     first = parser.parse('test int 1')
     second = parser.parse('int 1 test')
-    assert first == second
-    assert first.int == {'integer': 1}
-    assert first.name == 'test'
+    assert first.int == second.int
+    # in pre-0.1.5 versions, these would AssertionError because `int` wouldn't consume `test`
+    assert 'name' not in second
+    assert first != second
 
 
 def test_subparser_xor_failure():
-    for suffix in ('-S nothin', '-v', '-S nothin -v'):
+    for infix in ('-S nothin', '-v', '-S nothin -v'):
         with pytest.raises(errors.XORError):
-            parser.parse('test int 1 ' + suffix)
+            parser.parse('test {} int 1'.format(infix))
 
 
 def test_arg_failure():

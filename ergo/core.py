@@ -276,7 +276,7 @@ class _Handler:
             entity = Flag(cb, namespace=namespace, name=dest)
             if dest is not None:
                 self._aliases[cb.__name__] = entity.name
-            if short is not None:  # _Null == default, None == none
+            if short is not None:  # _Null == default; None == none
                 entity.short = short or entity.name[0]
                 self._aliases[entity.short] = entity.name
             if default is not _Null:
@@ -335,14 +335,17 @@ class ParserBase(_Handler, HelperMixin):
     def _extract_flargs(self, inp):
         flags = []
         args = []
+        command = None
         skip = 0
-        
         for idx, value in enumerate(inp, 1):
             if skip > 0:
                 skip -= 1
                 continue
             
             if not value.startswith(self.flag_prefix) or value in (self.flag_prefix, self.long_prefix):
+                if self.hascmd(value):
+                    command = (value, idx)
+                    break
                 args.append(value)
                 continue
             
@@ -362,7 +365,7 @@ class ParserBase(_Handler, HelperMixin):
                     skip = next_pos
                 flags.append((self.dealias(name), inp[idx:skip+idx]))
         
-        return flags, args
+        return flags, args, command
     
     def _clear_namespaces(self):
         for entity in chain(self.flags.values(), self.args.values()):
@@ -370,52 +373,39 @@ class ParserBase(_Handler, HelperMixin):
         for entity in (e for g in self._groups for e in chain(g.flags.values(), g.args.values(), g.commands.values())):
             entity.clear_nsp()
     
-    def do_parse(self, inp=None, *, flargs=None):
+    def do_parse(self, inp=None):
         parsed = {}
-        flags, positionals = self._extract_flargs(inp) if flargs is None else flargs
+        flags, positionals, command = self._extract_flargs(inp)
+        print(repr(self), flags, positionals, command)
         
         if 'help' in flags or 'h' in flags:
             self.print_help()
             raise SystemExit('\n')
         
-        consumed = set()
-        for idx, (flag, args) in enumerate(flags):
+        for flag, args in flags:
             if self.hasflag(flag):
-                consumed.add(idx)
                 entity = self.getflag(flag)
                 parsed[flag] = entity(*args)
-        flags[:] = [v for i, v in enumerate(flags) if i not in consumed]
         
-        consumed.clear()
-        for idx, value in enumerate(positionals):
-            if self.hascmd(value):
-                used, parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(
-                  flargs=(flags, positionals[1+idx:])
-                  )
-                consumed.update(map((1 + idx).__add__, used | {-1}))
-        positionals[:] = [v for i, v in enumerate(positionals) if i not in consumed]
-        used = consumed
+        if command is not None:
+            value, idx = command
+            parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(inp[idx:])
         
-        consumed.clear()
-        for idx, (value, (name, arg)) in enumerate(zip(positionals, self.args.items())):
-            consumed.add(idx)
+        for (name, arg), value in zip(self.args.items(), positionals):
             parsed[name] = arg(value)
-        positionals[:] = [v for i, v in enumerate(positionals) if i not in consumed]
         
         self.enforce_clumps(parsed)
         
         final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
         nsp = ErgoNamespace(**final)
+        
         if self._req_names.difference(nsp):
             raise errors.RequirementError('Expected the following required arguments: {}\nGot {}'.format(
               ", ".join(map(repr, self._req_names)),
               ", ".join(map(repr, self._req_names.intersection(nsp))) or 'none'
               )
             )
-        
-        if flargs is None:
-            return nsp
-        return used, nsp
+        return nsp
     
     def parse(self, inp, *, systemexit=None):
         try:
