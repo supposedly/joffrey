@@ -376,7 +376,6 @@ class ParserBase(_Handler, HelperMixin):
     def do_parse(self, inp=None):
         parsed = {}
         flags, positionals, command = self._extract_flargs(inp)
-        print(repr(self), flags, positionals, command)
         
         if 'help' in flags or 'h' in flags:
             self.print_help()
