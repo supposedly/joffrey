@@ -32,7 +32,7 @@ class Entity:
         self._args = ' '.join([i.upper() for i in params][bool(namespace):])
         self.argcount = sys.maxsize if any(i.kind == 2 for i in params.values()) else len(params) - bool(namespace)
         self.callback = func
-        self.help = func.__doc__
+        self.help = func.__doc__ or ''
         self.name = name or func.__name__
         self.namespace = None if namespace is None else SimpleNamespace(**namespace)
         self._nsp = namespace
@@ -154,6 +154,10 @@ class _Handler:
     def _req_names(self):
         return {e.name for e in self._required}
     
+    @property
+    def entity_names(self):
+        return set(chain(self.args, self.commands, self.flags))
+    
     def dealias(self, name):
         return self._aliases.get(name, name)
     
@@ -192,45 +196,61 @@ class _Handler:
             self._xor.add(Xor(XOR, self))
             Xor(XOR, self).add(obj)
     
-    def enforce_clumps(self, parsed):
-        AND_SUC = set(self.parent_and.successes(parsed))
-        OR_SUC = set(self.parent_or.successes(parsed))
-        XOR_SUC = set(self.parent_xor.successes(parsed))
+    def enforce_clumps(self, parsed, groups=None):
+        elim = {lbl.upper(): set(getattr(self, 'parent_'+lbl).successes(parsed)) for lbl in ('and', 'or', 'xor')}
+        if groups is not None:
+            g_dict = {g.name: g for g in groups}
+            g_clumps = {lbl: {g_dict.get(i) for i in set(successes).intersection(g_dict)} for lbl, successes in elim.items()}
+            g_clumps = {lbl: {name for g in groups for name in g.entity_names} for lbl, groups in g_clumps.items()}
+            elim = {lbl: grp.union(succ) for lbl, succ, grp in zip(elim, elim.values(), g_clumps.values())}
+        
+        err_details = dict(
+          AND_SUC=elim['AND'], OR_SUC=elim['OR'], XOR_SUC=elim['XOR'],
+          parsed=parsed,
+          groups=groups,
+          handler=repr(self)
+          )
         
         for all_failed, received in self._and.failures(parsed):
             # AND failure == member of an AND clump that was not given
             # an AND failure is okay if it's in a satisfied OR clump (i.e. there's at least one other OR in its clump that was given)
             # or if it's in a satisfied XOR clump (i.e. exactly one other XOR in its clump was given)
-            not_exempt = (all_failed - received) - OR_SUC - XOR_SUC
+            not_exempt = (all_failed - received) - elim['OR'] - elim['XOR']
             if not_exempt:
                 raise errors.ANDError(
                   'Expected all of the following flags/arguments: {}\nGot {}'.format(
                       ', '.join(map(repr, all_failed)),
                       ', '.join(map(repr, received)) or 'none'
-                    )
+                    ),
+                  **err_details,
+                  failed=all_failed, eliminating=received, not_exempt=not_exempt
                   )
         
         for all_failed, received in self._or.failures(parsed):
             # OR failure == member of an OR clump where none were given
             # an OR failure is okay if it's in a satisfied XOR clump (i.e. exactly one other XOR in its clump was given)
-            not_exempt = (all_failed - received) - XOR_SUC
+            not_exempt = (all_failed - received) - elim['XOR']
             if not_exempt:
                 raise errors.ORError(
                   'Expected at least one of the following flags/arguments: {}\nGot none'.format(
                       ', '.join(map(repr, all_failed))
-                    )
+                    ),
+                  **err_details,
+                  failed=all_failed, eliminating=received, not_exempt=not_exempt
                   )
         
         for all_failed, not_received in self._xor.failures(parsed):
             # XOR failure == member of an XOR clump that was given alongside at least one other
             # an XOR failure is okay if it satisfies an AND clump (i.e. all other ANDs in its clump were given)
-            not_exempt = (all_failed - not_received) - AND_SUC - self._req_names
+            not_exempt = (all_failed - not_received) - elim['AND'] - self._req_names
             if len(not_exempt) > 1:
                 raise errors.XORError(
                   'Expected no more than one of the following flags/arguments: {}\nGot {}'.format(
                       ', '.join(map(repr, all_failed)),
                       ', '.join(map(repr, all_failed - not_received))
-                    )
+                    ),
+                  **err_details,
+                  failed=all_failed, eliminating=not_received, not_exempt=not_exempt
                   )
         
         return True
@@ -305,8 +325,12 @@ class ParserBase(_Handler, HelperMixin):
         return super().hasflag(name) or super().hascmd(name) or name in self.args or self._aliases.get(name, _Null) in self.args
     
     def enforce_clumps(self, parsed):
-        p = {*parsed, *{next((g.name for g in self._groups if g.hasany(i)), None) for i in parsed}} - {None}
-        return super().enforce_clumps(p) and all(g.enforce_clumps(parsed) for g in self._groups if g.name in p)
+        p = set(parsed) | {next((g.name for g in self._groups if g.hasany(i)), None) for i in parsed} - {None}
+        return (
+          super().enforce_clumps(p, self._groups)
+          and
+          all(g.enforce_clumps(parsed) for g in self._groups if g.name in p)
+          )
     
     def _extract_flargs(self, inp):
         flags = []
@@ -379,7 +403,16 @@ class ParserBase(_Handler, HelperMixin):
         positionals[:] = [v for i, v in enumerate(positionals) if i not in consumed]
         
         self.enforce_clumps(parsed)
-        nsp = ErgoNamespace(**{**self._defaults, **parsed})
+        
+        final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
+        nsp = ErgoNamespace(**final)
+        if self._req_names.difference(nsp):
+            raise errors.RequirementError('Expected the following required arguments: {}\nGot {}'.format(
+              ", ".join(map(repr, self._req_names)),
+              ", ".join(map(repr, self._req_names.intersection(nsp))) or 'none'
+              )
+            )
+        
         if flargs is None:
             return nsp
         return used, nsp

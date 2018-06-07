@@ -50,3 +50,9 @@ class ErgoNamespace(SimpleNamespace):
     
     def values(self):
         return vars(self).values()
+    
+    def pretty(self, sep='\n', delim=': '):
+        return sep.join(
+          '{}{}{}'.format(k, delim, v)
+          for k, v in self.items()
+        )
