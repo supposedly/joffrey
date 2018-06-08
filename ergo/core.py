@@ -8,7 +8,6 @@ import sys
 import shlex
 from itertools import chain
 from keyword import iskeyword
-from types import SimpleNamespace
 
 from . import errors
 from .misc import multiton, ErgoNamespace
@@ -34,8 +33,7 @@ class Entity:
         self.callback = func
         self.help = func.__doc__ or ''
         self.name = name or func.__name__
-        self.namespace = None if namespace is None else SimpleNamespace(**namespace)
-        self._nsp = namespace
+        self.namespace = namespace
         self.AND = self.OR = self.XOR = _Null
     
     def __call__(self, *args, **kwargs):
@@ -45,11 +43,6 @@ class Entity:
     
     def __str__(self):
         return "`{}'".format(self.name)
-    
-    def clear_nsp(self):
-        if self.namespace is not None:
-            vars(self.namespace).clear()
-            vars(self.namespace).update(self._nsp)
 
 
 @multiton(cls=Entity.cls, kw=False)
@@ -367,14 +360,9 @@ class ParserBase(_Handler, HelperMixin):
         
         return flags, args, command
     
-    def _clear_namespaces(self):
-        for entity in chain(self.flags.values(), self.args.values()):
-            entity.clear_nsp()
-        for entity in (e for g in self._groups for e in chain(g.flags.values(), g.args.values(), g.commands.values())):
-            entity.clear_nsp()
-    
     def do_parse(self, inp=None):
         parsed = {}
+        namespaces = {}
         flags, positionals, command = self._extract_flargs(inp)
         
         if 'help' in flags or 'h' in flags:
@@ -384,7 +372,13 @@ class ParserBase(_Handler, HelperMixin):
         for flag, args in flags:
             if self.hasflag(flag):
                 entity = self.getflag(flag)
-                parsed[flag] = entity(*args)
+                parsed[flag] = entity(*args) if entity.namespace is None else entity(
+                  namespaces.setdefault(
+                    entity.name,
+                    ErgoNamespace(**entity.namespace)
+                    ),
+                  *args
+                  )
         
         if command is not None:
             value, idx = command
@@ -414,8 +408,6 @@ class ParserBase(_Handler, HelperMixin):
                 self.print_help()
                 raise SystemExit(e if str(e) else type(e))
             raise
-        finally:
-            self._clear_namespaces()
     
     def group(self, name, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
         if name in vars(self):
