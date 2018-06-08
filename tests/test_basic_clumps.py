@@ -5,16 +5,19 @@ from ergo import Parser, errors
 parser = Parser(systemexit=False)
 parser.group('sc', XOR=0)
 
+
 @parser.arg()
 def name(name):
     """Args, positional, are parsed in the order they're added in"""
     return name
+
 
 @parser.sc.clump(AND='blah')
 @parser.sc.flag(short='S')
 def scream(text):
     """I have no mouth and I must ... yeah"""
     return text.upper()
+
 
 @parser.sc.clump(AND='blah')
 @parser.sc.flag('verbosity', namespace={'count': 0})
@@ -23,6 +26,7 @@ def verbose(nsp):
     if nsp.count < 10:
         nsp.count += 1
     return nsp.count
+
 
 @parser.clump(XOR=0)
 @parser.flag('addition')

@@ -26,20 +26,18 @@ _Null = type(
 
 @multiton(kw=False)
 class Entity:
-    def __init__(self, func, *, name=None, namespace=None):
+    def __init__(self, func, *, name=None, namespace=None, help=None):
         params = inspect.signature(func).parameters
-        self._args = ' '.join([i.upper() for i in params][bool(namespace):])
+        self._args = [i.upper() for i in params][bool(namespace):]
         self.argcount = sys.maxsize if any(i.kind == 2 for i in params.values()) else len(params) - bool(namespace)
-        self.callback = func
-        self.help = func.__doc__ or ''
+        self.help = func.__doc__ or '' if help is None else help
         self.name = name or func.__name__
+        self.callback = func
         self.namespace = namespace
         self.AND = self.OR = self.XOR = _Null
     
     def __call__(self, *args, **kwargs):
-        if self.namespace is None:
-            return self.callback(*args, **kwargs)
-        return self.callback(self.namespace, *args, **kwargs)
+        return self.callback(*args, **kwargs)
     
     def __str__(self):
         return "`{}'".format(self.name)
@@ -51,11 +49,20 @@ class Flag(Entity.cls):
         self.short = None
         super().__init__(*args, **kwargs)
     
+    @property
+    def args(self):
+        if self._args:
+            return ' '.join(self._args[:-1]) + ' {}{}'.format(
+              '*' if self.argcount == sys.maxsize else '',
+              self._args[-1]
+              )
+        return ''
+    
     def __str__(self):
         space = ' ' if self._args else ''
         if self.short is None:
-            return '[--{}{s}{}]'.format(self.name, self._args, s=space)
-        return '[-{} | --{}{s}{}]'.format(self.short, self.name, self._args, s=space)
+            return '[--{}{s}{}]'.format(self.name, self.args, s=space)
+        return '[-{} | --{}{s}{}]'.format(self.short, self.name, self.args, s=space)
 
 
 class HelperMixin:
@@ -106,6 +113,12 @@ class HelperMixin:
     
     def print_help(self, usage=True, commands=True):
         print(self.format_help(usage, commands), end='\n\n')
+    
+    def error(self, exc=None):
+        self.print_help()
+        if exc is None:
+            raise SystemExit
+        raise SystemExit(exc if str(exc) else type(exc))
 
 
 class _Handler:
@@ -190,12 +203,23 @@ class _Handler:
             Xor(XOR, self).add(obj)
     
     def enforce_clumps(self, parsed, groups=None):
-        elim = {lbl.upper(): set(getattr(self, 'parent_'+lbl).successes(parsed)) for lbl in ('and', 'or', 'xor')}
+        elim = {lbl.upper(): getattr(self, 'parent_'+lbl).successes(parsed) for lbl in ('and', 'or', 'xor')}
         if groups is not None:
-            g_dict = {g.name: g for g in groups}
-            g_clumps = {lbl: {g_dict.get(i) for i in set(successes).intersection(g_dict)} for lbl, successes in elim.items()}
-            g_clumps = {lbl: {name for g in groups for name in g.entity_names} for lbl, groups in g_clumps.items()}
-            elim = {lbl: grp.union(succ) for lbl, succ, grp in zip(elim, elim.values(), g_clumps.values())}
+            g_clumps = {lbl: {groups.get(i) for i in set(successes).intersection(groups)} for lbl, successes in elim.items()}
+            zipped = {lbl: (elim[lbl], {name for g in groups for name in g.entity_names}) for lbl, groups in g_clumps.items()}
+            elim = {lbl: grp.union(success) for lbl, (success, grp) in zipped.items()}
+        
+        def extract_names(collection):
+            if groups is None:
+                return map(repr, collection)
+            return (
+              '[{}]'.format(
+                ', '.join(map(repr, groups[n].entity_names))
+                )
+              if n in groups
+              else repr(n)
+              for n in collection
+              )
         
         err_details = dict(
           AND_SUC=elim['AND'], OR_SUC=elim['OR'], XOR_SUC=elim['XOR'],
@@ -211,9 +235,9 @@ class _Handler:
             not_exempt = (all_failed - received) - elim['OR'] - elim['XOR']
             if not_exempt:
                 raise errors.ANDError(
-                  'Expected all of the following flags/arguments: {}\nGot {}'.format(
-                      ', '.join(map(repr, all_failed)),
-                      ', '.join(map(repr, received)) or 'none'
+                  'Expected all of the following flags/arguments: {}\n(Got {})'.format(
+                      ', '.join(extract_names(all_failed)),
+                      ', '.join(extract_names(received)) or 'none'
                     ),
                   **err_details,
                   failed=all_failed, eliminating=received, not_exempt=not_exempt
@@ -225,8 +249,8 @@ class _Handler:
             not_exempt = (all_failed - received) - elim['XOR']
             if not_exempt:
                 raise errors.ORError(
-                  'Expected at least one of the following flags/arguments: {}\nGot none'.format(
-                      ', '.join(map(repr, all_failed))
+                  'Expected at least one of the following flags/arguments: {}\n(Got none)'.format(
+                      ', '.join(extract_names(all_failed))
                     ),
                   **err_details,
                   failed=all_failed, eliminating=received, not_exempt=not_exempt
@@ -238,9 +262,9 @@ class _Handler:
             not_exempt = (all_failed - not_received) - elim['AND'] - self._req_names
             if len(not_exempt) > 1:
                 raise errors.XORError(
-                  'Expected no more than one of the following flags/arguments: {}\nGot {}'.format(
-                      ', '.join(map(repr, all_failed)),
-                      ', '.join(map(repr, all_failed - not_received))
+                  'Expected no more than one of the following flags/arguments: {}\n(Got {})'.format(
+                      ', '.join(extract_names(all_failed)),
+                      ', '.join(extract_names(all_failed-not_received))
                     ),
                   **err_details,
                   failed=all_failed, eliminating=not_received, not_exempt=not_exempt
@@ -264,9 +288,9 @@ class _Handler:
             return entity
         return inner
     
-    def flag(self, dest=None, short=_Null, *, default=_Null, namespace=None, required=False):
+    def flag(self, dest=None, short=_Null, *, default=_Null, namespace=None, help=None, required=False):
         def inner(cb):
-            entity = Flag(cb, namespace=namespace, name=dest)
+            entity = Flag(cb, namespace=namespace, name=dest, help=help)
             if dest is not None:
                 self._aliases[cb.__name__] = entity.name
             if short is not None:  # _Null == default; None == none
@@ -290,12 +314,14 @@ class _Handler:
 
 
 class ParserBase(_Handler, HelperMixin):
-    def __init__(self, flag_prefix='-', systemexit=True):
+    def __init__(self, flag_prefix='-', systemexit=True, no_help=False):
         self.flag_prefix = flag_prefix
         self.long_prefix = 2 * flag_prefix
         self.systemexit = systemexit
         self._groups = set()
         super().__init__()
+        if not no_help:
+            self.flags['help'] = self.flag('help', help='Prints help and exits')(lambda: self.error())
     
     def dealias(self, name):
         return next((g.dealias(name) for g in self._groups if g.hasany(name)), super().dealias(name))
@@ -320,7 +346,7 @@ class ParserBase(_Handler, HelperMixin):
     def enforce_clumps(self, parsed):
         p = set(parsed) | {next((g.name for g in self._groups if g.hasany(i)), None) for i in parsed} - {None}
         return (
-          super().enforce_clumps(p, self._groups)
+          super().enforce_clumps(p, {g.name: g for g in self._groups})
           and
           all(g.enforce_clumps(parsed) for g in self._groups if g.name in p)
           )
@@ -365,10 +391,6 @@ class ParserBase(_Handler, HelperMixin):
         namespaces = {}
         flags, positionals, command = self._extract_flargs(inp)
         
-        if 'help' in flags or 'h' in flags:
-            self.print_help()
-            raise SystemExit('\n')
-        
         for flag, args in flags:
             if self.hasflag(flag):
                 entity = self.getflag(flag)
@@ -405,8 +427,7 @@ class ParserBase(_Handler, HelperMixin):
             return self.do_parse(inp)
         except Exception as e:
             if systemexit is None and self.systemexit or systemexit:
-                self.print_help()
-                raise SystemExit(e if str(e) else type(e))
+                self.error(e)
             raise
     
     def group(self, name, *, required=False, AND=_Null, OR=_Null, XOR=_Null):

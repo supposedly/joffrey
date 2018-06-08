@@ -6,11 +6,11 @@ with open('README.md') as f:
 setuptools.setup(
     name='ergo',
     license='MIT',
-    version='0.1.6',
+    version='0.1.7',
     author='Elias Tarhini',
     author_email='eltrhn@gmail.com',
     url='https://github.com/eltrhn/ergo',
-    description='argparse, take 99999',
+    description='argparse take 99999',
     long_description=long_description,
     long_description_content_type='text/markdown',
     keywords='argparse argument parsing',

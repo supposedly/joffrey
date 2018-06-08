@@ -20,7 +20,7 @@ class _Clump:
 
 class ClumpGroup(set):
     def successes(self, parsed):
-        return (name for c in self if c.verify(parsed) for name in c.member_names)
+        return {name for c in self if c.verify(parsed) for name in c.member_names}
     
     def failures(self, parsed):
         return ((c.member_names, c.to_eliminate(parsed)) for c in self if not c.verify(parsed))

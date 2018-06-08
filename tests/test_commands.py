@@ -6,16 +6,19 @@ parser = Parser(systemexit=False)
 int_cmd = parser.command('int', XOR=0)
 parser.group('sc', XOR=0)
 
+
 @parser.arg()
 def name(name):
     """Args, positional, are parsed in the order they're added in"""
     return name
+
 
 @parser.sc.clump(AND='blah')
 @parser.sc.flag(short='S')
 def scream(text):
     """I have no mouth and I must ... yeah"""
     return text.upper()
+
 
 @parser.sc.clump(AND='blah')
 @parser.sc.flag('verbosity', namespace={'count': 0})
@@ -25,16 +28,11 @@ def verbose(nsp):
         nsp.count += 1
     return nsp.count
 
+
 @int_cmd.arg()
 def integer(string):
     """Wow a to-integer CLI"""
     return int(string)
-
-
-try:
-    print(parser.parse())
-except Exception as e:
-    pass
 
 
 def test_ok_1():
