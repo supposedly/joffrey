@@ -53,7 +53,7 @@ def first(value):
 
 @preview.flag(short='o', default='?')
 def state(num):
-    return str(num)
+    return num
 
 
 def test_no_and_failure():

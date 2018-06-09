@@ -1,9 +1,12 @@
 # Yet Another Command-Line-Argument Parser
 
-
-I've gotten tired of working around argparse. This suits my needs a bit better; vaguely inspired by
+I'm tired of working around argparse. This suits my needs a tad better; vaguely inspired by
 [discord.py](https://github.com/Rapptz/discord.py)'s brilliant
 [ext.commands](http://discordpy.readthedocs.io/en/rewrite/ext/commands/index.html) framework.
+
+```nginx
+pip install ergo
+```
 
 Example:
 
@@ -35,25 +38,30 @@ def verbose(nsp):
 
 @parser.clump(XOR=0)  # this flag *cannot* appear alongside any in group `sc` (same XOR)
 @parser.flag('addition')
-def add(a=4, *b):  # can also provide default args if needed
+def add(a: int = 4, *b: int):  # can also provide default args and a type-coercion hint if needed
     """Who needs a calculator"""
-    return int(a) + sum(map(int, b))
+    return a + sum(b)
 ```
 ```py
 >>> parser.parse('foo -S "test test" -vvvv')  # input will be shlex.split if given as a string (defaults to sys.argv though)
 ErgoNamespace(name='foo', scream='TEST TEST', verbosity=3)
+>>> 
 >>> parser.parse('foo -v')
 # <help/usage info...>
 Expected all of the following flags/arguments: 'scream', 'verbosity'
 (Got 'verbosity')
+>>> 
 >>> parser.parse('foo --add 1 6')
 ErgoNamespace(addition=7, name='foo')
+>>> 
 >>> parser.parse('foo -a')  # same as `foo --add`; default short alias is first letter of name (`short=None` removes entirely)
 ErgoNamespace(addition=4, name='foo')
+>>> 
 >>> parser.parse('foo -a 1 2 -S "this is gonna error" -v')
 # <help/usage info...>
 Expected no more than one of the following flags/arguments: 'addition', ['scream', 'verbosity']
 (Got 'addition', ['scream', 'verbosity'])
+>>> 
 >>> # etc
 ```
 And the mysterious `help/usage info...`:
@@ -70,7 +78,7 @@ FLAGS
 ```
 (To get rid of the default `help` flag, pass `no_help=True` to `Parser()`)
 
-The only things not decorator-based are "groups" and "commands". Commands basically sub-parsers that have a 'name' attribute,
+The only things not decorator-based are "groups" and "commands". Commands (subparsers) are parsers that have a 'name' attribute,
 and groups -- demo'd above -- are applied their clump settings as a whole rather than applying them to each individual
 flag/arg within the group.
 

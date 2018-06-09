@@ -10,7 +10,7 @@ from itertools import chain
 from keyword import iskeyword
 
 from . import errors
-from .misc import multiton, ErgoNamespace
+from .misc import typecast, multiton, ErgoNamespace
 from .clumps import And, Or, Xor, ClumpGroup
 
 
@@ -26,13 +26,13 @@ _Null = type(
 
 @multiton(kw=False)
 class Entity:
-    def __init__(self, func, *, name=None, namespace=None, help=None):
+    def __init__(self, func, *, name=None, namespace=None, help=None, _='-'):
         params = inspect.signature(func).parameters
         self._args = [i.upper() for i in params][bool(namespace):]
         self.argcount = sys.maxsize if any(i.kind == 2 for i in params.values()) else len(params) - bool(namespace)
+        self.func, self.callback = func, typecast(func)
         self.help = func.__doc__ or '' if help is None else help
-        self.name = name or func.__name__
-        self.callback = func
+        self.name = (name or func.__name__).replace('_', _)
         self.namespace = namespace
         self.AND = self.OR = self.XOR = _Null
     
@@ -274,28 +274,38 @@ class _Handler:
     
     def clump(self, *, AND=_Null, OR=_Null, XOR=_Null):
         def inner(cb):
-            entity = Entity(cb.callback if isinstance(cb, Entity.cls) else cb)
+            entity = Entity(cb.func if isinstance(cb, Entity.cls) else cb)
             self._clump(entity, AND, OR, XOR)
             return entity
         return inner
     
-    def arg(self, required=False):
+    def arg(self, required=False, **kwargs):
+        """
+        Expected kwargs: _ (str)
+        """
         def inner(cb):
-            entity = Entity(cb)
+            entity = Entity(cb, **kwargs)
             if required:
                 self._required.add(entity)
             self.args[entity.name] = entity
             return entity
         return inner
     
-    def flag(self, dest=None, short=_Null, *, default=_Null, namespace=None, help=None, required=False):
+    def flag(self, dest=None, short=_Null, *, default=_Null, namespace=None, required=False, **kwargs):
+        """
+        Expected kwargs: _ (str), help (bool)
+        """
         def inner(cb):
-            entity = Flag(cb, namespace=namespace, name=dest, help=help)
+            entity = Flag(cb, namespace=namespace, name=dest, **kwargs)
             if dest is not None:
                 self._aliases[cb.__name__] = entity.name
             if short is not None:  # _Null == default; None == none
-                entity.short = short or entity.name[0]
-                self._aliases[entity.short] = entity.name
+                try:
+                    entity.short = short or next(s for s in entity.name if s.isalnum() and s not in self._aliases)
+                except StopIteration:
+                    pass
+                else:
+                    self._aliases[entity.short] = entity.name
             if default is not _Null:
                 self._defaults[entity.name] = default
             if required:
@@ -304,7 +314,8 @@ class _Handler:
             return entity
         return inner
     
-    def command(self, name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, **kwargs):
+    def command(self, name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, _='-', **kwargs):
+        name = name.replace('_', _)
         subparser = Subparser(*args, **kwargs, name=name, parent=self)
         for alias in aliases:
             self._aliases[alias] = name
@@ -320,6 +331,8 @@ class ParserBase(_Handler, HelperMixin):
         self.systemexit = systemexit
         self._groups = set()
         super().__init__()
+        if not flag_prefix:
+            raise ValueError('Flag prefix cannot be empty')
         if not no_help:
             self.flags['help'] = self.flag('help', help='Prints help and exits')(lambda: self.error())
     
@@ -471,7 +484,7 @@ class Group(SubHandler):
             if required:
                 self._required.add(entity)
             self.args[entity.name] = entity
-            return self.parent.arg(required)(entity.callback)
+            return self.parent.arg(required)(entity.func)
         return inner
 
 
