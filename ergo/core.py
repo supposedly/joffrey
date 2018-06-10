@@ -32,7 +32,8 @@ class Entity:
         self.argcount = sys.maxsize if any(i.kind == 2 for i in params.values()) else len(params) - bool(namespace)
         self.func, self.callback = func, typecast(func)
         self.help = func.__doc__ or '' if help is None else help
-        self.name = (name or func.__name__).replace('_', _)
+        self.pyname = name or func.__name__
+        self.name = self.pyname.replace('_', _)
         self.namespace = namespace
         self.AND = self.OR = self.XOR = _Null
     
@@ -407,7 +408,7 @@ class ParserBase(_Handler, HelperMixin):
         for flag, args in flags:
             if self.hasflag(flag):
                 entity = self.getflag(flag)
-                parsed[flag] = entity(*args) if entity.namespace is None else entity(
+                parsed[entity.pyname] = entity(*args) if entity.namespace is None else entity(
                   namespaces.setdefault(
                     entity.name,
                     ErgoNamespace(**entity.namespace)
@@ -419,8 +420,8 @@ class ParserBase(_Handler, HelperMixin):
             value, idx = command
             parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(inp[idx:])
         
-        for (name, arg), value in zip(self.args.items(), positionals):
-            parsed[name] = arg(value)
+        for (name, entity), value in zip(self.args.items(), positionals):
+            parsed[entity.pyname] = entity(value)
         
         self.enforce_clumps(parsed)
         

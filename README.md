@@ -1,14 +1,28 @@
 # Yet Another Command-Line-Argument Parser
 
-I'm tired of working around argparse. This suits my needs a tad better; vaguely inspired by
+I'm tired of working around argparse. This, vaguely inspired by
 [discord.py](https://github.com/Rapptz/discord.py)'s brilliant
-[ext.commands](http://discordpy.readthedocs.io/en/rewrite/ext/commands/index.html) framework.
+[ext.commands](http://discordpy.readthedocs.io/en/rewrite/ext/commands/index.html) framework,
+suits my needs a tad better.
+
+[](#separator-for-pypi)
 
 ```nginx
 pip install ergo
 ```
 
-Example:
+## Contents
+
+1. [Example](#example)
+2. [Why?](#why)
+3. [Documentation](#documentation)
+    1. [Parser](#parser)
+    2. [Callbacks](#callbacks)
+    3. [Typehinting goodies](#more-typehints)
+
+[](#separator-for-pypi)
+
+## Example
 
 ```py
 from ergo import Parser
@@ -91,5 +105,148 @@ parser.group('something', XOR='whatever')
 cmd = parser.command('etc')  # first arg is name
 ```
 
-# To do
-so much
+## Why?
+I needed a way to define sort-of-complex interdependencies between command-line options. None of the available libs
+I found were able to handle this out of the box to an acceptable degree, so I decided to try my own hand;
+I feel like the lib should be able to handle this stuff itself, without your needing to delegate roles like *"check
+that these two flags aren't used at the same time as this arg"* or *"make sure all these things appear
+together, or alternatively that this second thing does"* to external functions or post-parsing if-statements.
+
+Ergo, by the way, is still early in alpha. If it really doesn't solve the same problem for you that it does for me,
+I think you'd be better off trying something else; docopt, for example, is superb, and Fire's no-assembly-required
+philosophy is quite fun in its own right.  
+I also, in full disclosure, don't too much enjoy the design of a lot of current argparse-like solutions (really, most
+of them except docopt). As such, in addition to aiding in the creation of such interdependent systems as mentioned
+above, ergo is also my shot at creating a more-intuitive interface for this sort of stuff.
+Time will have to tell whether it succeeds!
+
+[](#separator-for-pypi)
+
+## Documentation
+
+### Parser
+```py
+from ergo import Parser
+```
+The main dish.  
+`parser = Parser(flag_prefix='-', systemexit=True, no_help=False)`
+- `flag_prefix` (`str`): The 'short' prefix used to reference this parser's flags from the command line. Cannot be empty.
+    Derived from this as well is `Parser().long_prefix`, constructed by doubling `flag_prefix`.
+- `systemexit` (`bool`): Whether, during parsing, to yield to the default behavior of capturing exceptions then printing them
+    in a `SystemExit` call alongside the default help/usage info (`True`) -- or to allow exceptions to bubble up as normal (`False`).
+- `no_help` (`bool`): If `True`, prevents creation of a default `h` (short) / `help` (long) flag.
+
+Methods:
+- `flag` (decorator): See [`Callbacks`](#callbacks) for more info.  
+    `@parser.flag(dest=None, short=_Null, *, default=_Null, namespace=None, required=False, help=None, _='-')`
+    - `dest` (`str`): The name this flag will be referenced by from the command line (with long prefix), as well as the name it will
+        appear as in the final `Parser.parse()` output. Defaults to the decorated function's `__name__`.
+    - `short` (`str`): This flag's single-character short alias, to be used from the command line with `parser.flag_prefix`. If `None`,
+        no short alias will be made; if left alone (i.e. passed `ergo.core._Null`), defaults to the first alphanumeric character in the
+        decorated function's `__name__`.
+    - `default`: Default value of this flag if not invoked during parsing. (no default value if `_Null`)
+    - `namespace` (`dict`): The starting values for this flag's "namespace", a `types.SimpleNamespace` object passed as the first argument
+        to the decorated function. Can be used to store values between repeated flag invocations. If `None`, no namespace will be created
+        or passed to said function.
+    - `required` (`bool`): Whether to error if this flag is not provided (independent of clump settings; do not use this with `XOR`, for instance).
+    - `help`: Help text to appear alongside this flag. If not provided, will be grabbed if present from the decorated function's `__doc__`.
+    - `_`: Determines how to replace underscores in the flag's name (be the name from `dest` or the function's `__name__`). Default `'-'`, meaning
+        that a flag named `check_twice` will be invoked and appear in the final output as `--check-twice`.
+- `arg` (decorator): See [`Callbacks`](#callbacks) for more info.  
+    `@parser.arg(required=False, help=None, _='-')`  
+    *See identical args of `flag`.*
+- `clump` (decorator): Each component (AND, OR, XOR) takes an identifier, and any other entity bound to this parser with
+    the same identifier is considered part of the same clump.  
+    `@parser.clump(AND=_Null, OR=_Null, XOR=_Null)`
+    - `AND`: Clumps together entities that *must* appear together. An ANDed entity is excused from being invoked if it is
+        part of a satisfied OR clump (i.e. at least one other member of its OR clump appeared) or a satisfied XOR clump (i.e.
+        exactly one other member of its XOR clump appeared).
+    - `OR`: Clumps together entities of which *at least one* must appear. An ORed entity is excused from being invoked if it is
+        part of a satisfied XOR clump (i.e. exactly one other member of its XOR clump appeared).
+    - `XOR`: Clumps together entities of which *at most one* can appear. An XORed entity is allowed to appear alongside more than one
+        other if it satisfies an AND clump (i.e. all other members of its AND clump appeared) or if it is `required`.
+- `group`: Creates a "group", which applies its clump settings to itself as a whole rather than to its members. Groups can also clump entities
+    within themselves.  
+    `parser.group(name, *, required=False, AND=_Null, OR=_Null, XOR=_Null)`  
+    *See identical args of `flag` and `clump`.*
+    - `name` (`str`): This group's name; is added as an attribute to the parser, so `@parser.group('x', ...)` will result in the group being
+        accessible as `parser.x`. The `group()` method also returns the created group, however, so it can be assigned to its own variable name
+        if need be.
+- `command`:  Returns a sub-parser of this parser. When a command is detected in parsing input, parsing of its parent's options is abandoned and everything
+    to the right is passed to the subparser instance.
+    `parser.command(name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, _='-', **kwargs)`
+    *See identical args of `flag` and `clump`.*
+    *\*args, \*\*kwargs are passed to `Parser.__init__()`.*
+    - `name` (`str`): The name with which this command is to be invoked from the command line, as well as the name under which its final parsed
+        output will appear in its parent's.
+    - `aliases` (`tuple`): Alternative names with which this command can be invoked.
+
+### Callbacks
+`Parser.flag` and `Parser.arg` decorate functions; these functions are subsequently called when their flag/arg's name is detected during parsing.
+
+If a callback's parameters are [type-hinted](https://www.python.org/dev/peps/pep-3107/), the arguments passed will attempt to be "converted" by
+these typehints. That is, if the hint is a callable object, it will be called on a command-line argument passed in that spot. Consider the
+following flag:
+
+```py
+@parser.flag('addition')
+def add(a: int, b: int):
+    """Who needs a calculator"""
+    return a + b
+```
+
+If this flag is invoked from the command line as `--addition 1 2`, each of `1` and `2` will be given (as a string) to the `int` typehint and thus passed into
+the `add()` function as an integer. (No error would result if the hint were not callable; the command-line value would simply not be converted from a string)
+
+The number of arguments to be passed to a **flag** is determined by the number of parameters its function has; **args**, on the other hand, **only pass one value** to their callbacks.
+A future release of ergo will allow for arguments to be defined as consuming every positional after a certain point, though.
+
+Speaking of consuming, let's take a look at, from above, a more-involved flag-callback example:
+
+```py
+@parser.flag('addition')
+def add(a: int = 4, *b: int):
+    """Who needs a calculator"""
+    return a + sum(b)
+```
+
+This demonstrates two new things: splat (`*`) parameters and default arguments. These in fact take advantage of standard Python machinery, with no additional
+finagling on ergo's end: flag callbacks by design are passed as many arguments as the user gives them, up to their number of parameters, and the presence of
+a splat simply brings said "number of parameters" up to `sys.maxsize` -- which, presumably, the user will always pass fewer arguments than. The presence of a
+default argument, similarly, just allows the callback to not error if the user doesn't pass it all of its parameters.
+
+If this callback were invoked as...
+- `--addition 1 2`: would return `3`
+- `--addition 1 2 3 4 5 ... n` would return `sum(range(1, n))` inclusive
+- `--addition 1`: would return `1`
+- `--addition`: would return `4` (default argument)
+
+### More typehints
+Ergo itself provides two additional typehint aids: `booly` and `auto`.
+
+`ergo.booly`:
+- The usual `bool` type isn't particularly useful as a converter, because all the strings it's going to be passed are truthy. `booly`, on the other hand,
+    evaluates args that are bool ... -y: booleanlike. Returns `True` if passed any of `yes`, `y`, `true`, `t`, `1`, and `False` if passed any of `no`, `n`, `false`, `f`.
+    Argument is `str.lower`ed.
+
+`ergo.auto`:
+- `auto` by itself:
+    - Works identically to a normal converter, but calls `ast.literal_eval()` on the string it's passed. If an error results, meaning the string does
+    not contain a literal of any sort, returns the string itself.
+- `auto(*types)`:
+    - Takes a series of `type` objects, and the resultant `auto` instance will too apply `ast.literal_eval()` on its argument -- but after
+    this is done, it will ensure that the resultant object passes an `isinstance(object, types)` check.  
+    Applying the bitwise negation operator, as in `~auto(*types)`, will cause it to instead ensure that the object passes a **`not`**`isinstance(object, types)` check.
+
+
+Feel free to play around with different `parser.parse()` arguments on the below example:
+
+```py
+from ergo import auto, booly, Parser
+
+parser = Parser()
+
+@parser.flag()
+def typehint_stuff(a: booly, b: auto, c: auto(list, tuple), d: ~auto(str)):
+    return a, b, c, d
+```

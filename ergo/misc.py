@@ -7,6 +7,8 @@ from types import SimpleNamespace
 
 def typecast(func):
     params = inspect.signature(func).parameters.values()
+    defaults = [p.default for p in params]
+    num_expected = sum(d is inspect._empty for d in defaults)
     
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -20,8 +22,11 @@ def typecast(func):
         # Assign default to handle **kwargs annotation if not given/callable
         if not callable(kw_annot.get(None)):
             kw_annot[None] = lambda x: x
+        if len(args) < num_expected:  # TODO: do this for kwargs as well (although kwargs won't be an ergo thing)
+            raise TypeError("{}() expected at least {} arguments, got {}".format(func.__name__, num_expected, len(args)))
         if len(args) < len(pos_annot):
-            raise TypeError("{}() expected at least {} arguments, got {}".format(func.__name__, len(pos_annot), len(args)))
+            pos_annot = [i < len(args) and v for i, v in enumerate(pos_annot)]
+            args = (*args, *defaults[len(args):])
         # zip_longest to account for any var_positional argument
         fill = zip_longest(pos_annot, args, fillvalue=pos_annot[-1] if pos_annot else None)
         return func(
@@ -41,33 +46,47 @@ def booly(arg):
         raise ValueError('Could not convert {!r} to boolean'.format(arg))
 
 
-def _leval(obj):
-    try:
-        return literal_eval(obj)
-    except (SyntaxError, ValueError):
-        return obj
-
-
-def auto(obj, *rest):
-    if isinstance(obj, str):
-        return _leval(obj)
+class auto:
+    def __new__(cls, obj, *rest):
+        if isinstance(obj, str) and not rest:
+            return cls._leval(obj)
+        return super().__new__(cls)
     
-    types = (obj, *rest)
-    if not all(isinstance(i, type) for i in types):
-        raise TypeError('auto() argument "{}" is not a type'.format(
-          next(i for i in types if not isinstance(i, type))
-        ))
+    def __init__(self, *types):
+        self.types = types
+        self.negated = False
+        
+        if not all(isinstance(i, type) for i in self.types):
+            raise TypeError('auto() argument "{}" is not a type'.format(
+              next(i for i in self.types if not isinstance(i, type))
+            ))
     
-    def inner(obj):
-        ret = _leval(obj)
-        if not isinstance(ret, types):
+    def __invert__(self):
+        self.negated ^= True
+        return self
+    
+    def __call__(self, obj):
+        ret = self._leval(obj)
+        if self.negated:
+            if isinstance(ret, self.types):
+                raise TypeError('Did not expect {}-type {!r}'.format(
+                  type(ret).__name__,
+                  ret
+                ))
+        elif not isinstance(ret, self.types):
             raise TypeError('Expected {}, got {} {!r}'.format(
-              '/'.join(i.__name__ for i in types),
+              '/'.join(i.__name__ for i in self.types),
               type(ret).__name__,
               ret
             ))
         return ret
-    return inner
+    
+    @staticmethod
+    def _leval(obj):
+        try:
+            return literal_eval(obj)
+        except (SyntaxError, ValueError):
+            return obj
 
 
 class multiton:

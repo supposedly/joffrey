@@ -1,7 +1,6 @@
 import pytest
 from ergo import Parser, errors
 
-
 parser = Parser(systemexit=False)
 int_cmd = parser.command('int', XOR=0)
 parser.group('sc', XOR=0)

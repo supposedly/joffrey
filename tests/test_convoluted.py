@@ -1,7 +1,6 @@
 import pytest
 from ergo import Parser, errors
 
-
 parser = Parser(systemexit=False)
 parser.group('grp_0', XOR=0)
 preview = parser.command('preview', XOR=0, OR=0)
