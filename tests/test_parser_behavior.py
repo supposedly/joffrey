@@ -17,13 +17,13 @@ def test_underscore_kwarg(parser):
     @parser.flag()
     def oh_hi():
         pass
-    assert 'oh-hi' in parser.parse('--oh-hi')
+    assert 'oh_hi' in parser.parse('--oh-hi')
 
 
 def test_change_underscore(parser):
     parser.flag('oh_hi')(lambda: None)
     parser.flag('oh_hello', _='.')(lambda: None)
     
-    assert 'oh.hello' in parser.parse('--oh.hello')
-    assert 'oh.hello' in parser.parse('-e')  # next untaken alphanumeric alias
-    assert 'oh-hi' in parser.parse('-o')
+    assert 'oh_hello' in parser.parse('--oh.hello')
+    assert 'oh_hello' in parser.parse('-e')  # next untaken alphanumeric alias
+    assert 'oh_hi' in parser.parse('-o')

@@ -129,7 +129,10 @@ Time will have to tell whether it succeeds!
 from ergo import Parser
 ```
 The main dish.  
+
 `parser = Parser(flag_prefix='-', systemexit=True, no_help=False)`
+
+[]()
 - `flag_prefix` (`str`): The 'short' prefix used to reference this parser's flags from the command line. Cannot be empty.
     Derived from this as well is `Parser().long_prefix`, constructed by doubling `flag_prefix`.
 - `systemexit` (`bool`): Whether, during parsing, to yield to the default behavior of capturing exceptions then printing them
@@ -137,8 +140,12 @@ The main dish.
 - `no_help` (`bool`): If `True`, prevents creation of a default `h` (short) / `help` (long) flag.
 
 Methods:
-- `flag` (decorator): See [`Callbacks`](#callbacks) for more info.  
+- `flag` (decorator):  
+    See [`Callbacks`](#callbacks) for more info.  
+
     `@parser.flag(dest=None, short=_Null, *, default=_Null, namespace=None, required=False, help=None, _='-')`
+    
+    []()
     - `dest` (`str`): The name this flag will be referenced by from the command line (with long prefix), as well as the name it will
         appear as in the final `Parser.parse()` output. Defaults to the decorated function's `__name__`.
     - `short` (`str`): This flag's single-character short alias, to be used from the command line with `parser.flag_prefix`. If `None`,
@@ -151,13 +158,22 @@ Methods:
     - `required` (`bool`): Whether to error if this flag is not provided (independent of clump settings; do not use this with `XOR`, for instance).
     - `help`: Help text to appear alongside this flag. If not provided, will be grabbed if present from the decorated function's `__doc__`.
     - `_`: Determines how to replace underscores in the flag's name (be the name from `dest` or the function's `__name__`). Default `'-'`, meaning
-        that a flag named `check_twice` will be invoked and appear in the final output as `--check-twice`.
-- `arg` (decorator): See [`Callbacks`](#callbacks) for more info.  
+        that a flag named `check_twice` will be invoked as `--check-twice` (if `_='.'`, then `--check.twice`). Final output will still use the
+        original pre-replacement name, however.
+- `arg` (decorator):  
+    See [`Callbacks`](#callbacks) for more info.  
+
     `@parser.arg(required=False, help=None, _='-')`  
     *See identical args of `flag`.*
-- `clump` (decorator): Each component (AND, OR, XOR) takes an identifier, and any other entity bound to this parser with
+    
+    []()
+- `clump` (decorator):  
+    Each component (AND, OR, XOR) takes an identifier, and any other entity bound to this parser with
     the same identifier is considered part of the same clump.  
+    
     `@parser.clump(AND=_Null, OR=_Null, XOR=_Null)`
+    
+    []()
     - `AND`: Clumps together entities that *must* appear together. An ANDed entity is excused from being invoked if it is
         part of a satisfied OR clump (i.e. at least one other member of its OR clump appeared) or a satisfied XOR clump (i.e.
         exactly one other member of its XOR clump appeared).
@@ -165,18 +181,26 @@ Methods:
         part of a satisfied XOR clump (i.e. exactly one other member of its XOR clump appeared).
     - `XOR`: Clumps together entities of which *at most one* can appear. An XORed entity is allowed to appear alongside more than one
         other if it satisfies an AND clump (i.e. all other members of its AND clump appeared) or if it is `required`.
-- `group`: Creates a "group", which applies its clump settings to itself as a whole rather than to its members. Groups can also clump entities
+- `group`:  
+    Creates a "group", which applies its clump settings to itself as a whole rather than to its members. Groups can also clump entities
     within themselves.  
+    
     `parser.group(name, *, required=False, AND=_Null, OR=_Null, XOR=_Null)`  
     *See identical args of `flag` and `clump`.*
+    
+    []()
     - `name` (`str`): This group's name; is added as an attribute to the parser, so `@parser.group('x', ...)` will result in the group being
         accessible as `parser.x`. The `group()` method also returns the created group, however, so it can be assigned to its own variable name
         if need be.
-- `command`:  Returns a sub-parser of this parser. When a command is detected in parsing input, parsing of its parent's options is abandoned and everything
-    to the right is passed to the subparser instance.
-    `parser.command(name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, _='-', **kwargs)`
-    *See identical args of `flag` and `clump`.*
+- `command`:  
+    Returns a sub-parser of this parser. When a command is detected in parsing input, parsing of its parent's options is abandoned and everything
+    to the right is passed to the subparser instance.  
+    
+    `parser.command(name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, _='-', **kwargs)`  
+    *See identical args of `flag` and `clump`.*  
     *\*args, \*\*kwargs are passed to `Parser.__init__()`.*
+    
+    []()
     - `name` (`str`): The name with which this command is to be invoked from the command line, as well as the name under which its final parsed
         output will appear in its parent's.
     - `aliases` (`tuple`): Alternative names with which this command can be invoked.
