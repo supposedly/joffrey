@@ -1,9 +1,11 @@
 # Yet Another Command-Line-Argument Parser
 
-I'm tired of working around argparse. This, vaguely inspired by
+[![Build Status](https://travis-ci.com/eltrhn/ergo.svg?branch=master)](https://travis-ci.com/eltrhn/ergo)
+[![codecov](https://codecov.io/gh/eltrhn/ergo/branch/master/graph/badge.svg)](https://codecov.io/gh/eltrhn/ergo)
+
+I'm tired of working around argparse. This suits my needs a tad better; vaguely inspired by
 [discord.py](https://github.com/Rapptz/discord.py)'s brilliant
-[ext.commands](http://discordpy.readthedocs.io/en/rewrite/ext/commands/index.html) framework,
-suits my needs a tad better.
+[ext.commands](http://discordpy.readthedocs.io/en/rewrite/ext/commands/index.html) framework.
 
 [](#separator-for-pypi)
 
@@ -142,7 +144,7 @@ The main dish.
 Methods:
 - `flag` (decorator):  
     See [`Callbacks`](#callbacks) for more info.  
-
+    
     `@parser.flag(dest=None, short=_Null, *, default=_Null, namespace=None, required=False, help=None, _='-')`
     
     []()
@@ -162,7 +164,7 @@ Methods:
         original pre-replacement name, however.
 - `arg` (decorator):  
     See [`Callbacks`](#callbacks) for more info.  
-
+    
     `@parser.arg(required=False, help=None, _='-')`  
     *See identical args of `flag`.*
     
