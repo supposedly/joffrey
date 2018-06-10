@@ -1,0 +1,14 @@
+language: python
+python:
+  - "3.6"
+  - "3.5"
+cache: pip
+install:
+  - pip install pytest pytest-cov codecov
+before_script:
+  - pip install -U .
+  - ERGO=$(pip show ergo | grep "Location" | grep -o "/.*")/ergo
+script:
+  - py.test --cov="$ERGO" tests/
+after_success:
+  - codecov
