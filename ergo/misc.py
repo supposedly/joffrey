@@ -1,4 +1,5 @@
 import inspect
+from ast import literal_eval
 from functools import wraps
 from itertools import zip_longest
 from types import SimpleNamespace
@@ -28,6 +29,45 @@ def typecast(func):
           **{a: kw_annot[a](b) if a in kw_annot and callable(kw_annot[a]) else kw_annot[None](b) for a, b in kwargs.items()}
           )
     return wrapper
+
+
+def booly(arg):
+    comp = arg.lower()
+    if comp in ('yes', 'y', 'true', 't', '1'):
+        return True
+    elif comp in ('no', 'n', 'false', 'f', '0'):
+        return False
+    else:
+        raise ValueError('Could not convert {!r} to boolean'.format(arg))
+
+
+def _leval(obj):
+    try:
+        return literal_eval(obj)
+    except (SyntaxError, ValueError):
+        return obj
+
+
+def auto(obj, *rest):
+    if isinstance(obj, str):
+        return _leval(obj)
+    
+    types = (obj, *rest)
+    if not all(isinstance(i, type) for i in types):
+        raise TypeError('auto() argument "{}" is not a type'.format(
+          next(i for i in types if not isinstance(i, type))
+        ))
+    
+    def inner(obj):
+        ret = _leval(obj)
+        if not isinstance(ret, types):
+            raise TypeError('Expected {}, got {} {!r}'.format(
+              '/'.join(i.__name__ for i in types),
+              type(ret).__name__,
+              ret
+            ))
+        return ret
+    return inner
 
 
 class multiton:

@@ -30,9 +30,9 @@ def verbose(nsp):
 
 
 @int_cmd.arg()
-def integer(string):
+def integer(num: int):
     """Wow a to-integer CLI"""
-    return int(string)
+    return num
 
 
 def test_ok_1():
@@ -58,3 +58,8 @@ def test_subparser_xor_failure():
 def test_arg_failure():
     with pytest.raises(TypeError):
         parser.parse('test -S')
+
+
+def test_conv_failure():
+    with pytest.raises(ValueError):
+        parser.parse('test int what')
