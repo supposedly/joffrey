@@ -213,6 +213,24 @@ Methods:
     - `name` (`str`): The name with which this command is to be invoked from the command line, as well as the name under which its final parsed
         output will appear in its parent's.
     - `aliases` (`tuple`): Alternative names with which this command can be invoked.
+- `remove`:
+    Removes an entity, be it an arg, flag, or command.
+    
+    `parser.remove(name)`
+
+    []()
+    - `name` (`str`, `Entity`): Name of arg to remove. If passed an Entity instance, uses its name instead.
+- `parse`:
+    Applies parser's args/flags/commands/groups/clumps to its given input.
+
+    `parser.parse(inp=sys.argv[1:], *, systemexit=None, strict=False)`
+
+    []()
+    - `inp` (`str`, `list`): Input to parse args of. If given as a string, converted using `shlex.split()`.
+    - `systemexit`: If set, overrides parser-level `systemexit` attribute. Has the same meaning, then, as `Parser.systemexit`.
+    - `strict`: If `True`, parses in "strict mode": Unknown flags will cause an error rather than be ignored, and a bad amount
+    of arguments (too few/too many) will do the same.
+
 
 ### Callbacks
 `Parser.flag` and `Parser.arg` decorate functions; these functions are subsequently called when their flag/arg's name is detected during parsing.

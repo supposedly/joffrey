@@ -171,6 +171,18 @@ class _Handler:
     def dealias(self, name):
         return self._aliases.get(name, name)
     
+    def remove(self, name):
+        if isinstance(name, Entity.cls):
+            name = name.pyname
+        if name in self.arg_map:
+            del self.arg_map[name]
+            self.args[:] = list(filter(name.__eq__, self.args))
+        else:
+            try:
+                del next(filter(lambda c: name in c, (self.commands, self.flags)))[name]
+            except StopIteration:
+                raise KeyError('No such entity')
+    
     def getarg(self, name):
         try:
             return self.arg_map[name]
@@ -355,6 +367,19 @@ class ParserBase(_Handler, HelperMixin):
     def dealias(self, name):
         return next((g.dealias(name) for g in self._groups if g.hasany(name)), super().dealias(name))
     
+    def remove(self, name):
+        try:
+            super().remove(name)
+        except KeyError:
+            for g in self._groups:
+                try:
+                    g.remove(name)
+                except KeyError:
+                    pass
+                else:
+                    return
+            raise
+    
     def getarg(self, name):
         try:
             return super().getarg(name)
@@ -400,7 +425,7 @@ class ParserBase(_Handler, HelperMixin):
           *args, **kwargs
           )
     
-    def _extract_flargs(self, inp):
+    def _extract_flargs(self, inp, strict=False):
         flags = []
         args = []
         command = None
@@ -415,6 +440,10 @@ class ParserBase(_Handler, HelperMixin):
                     command = (value, idx)
                     break
                 args.append(value)
+                if strict and len(args) > len(self.args):
+                    raise TypeError('Too many positional arguments (expected {}, got {})'.format(
+                      len(self.args), len(args)
+                      ))
                 continue
             
             if value.startswith(self.long_prefix):
@@ -424,21 +453,31 @@ class ParserBase(_Handler, HelperMixin):
                     if next_pos < skip:
                         skip = next_pos
                     flags.append((self.dealias(value.lstrip(self.flag_prefix)), inp[idx:skip+idx]))
+                elif strict:
+                    raise TypeError("Unknown flag `{}'".format(value))
                 continue
             
-            for name in filter(self.hasflag, value[1:]):  # short
-                skip = self.getflag(name).argcount
-                next_pos = next((i for i, v in enumerate(inp[idx:]) if v.startswith(self.flag_prefix)), len(inp))
-                if next_pos < skip:
-                    skip = next_pos
-                flags.append((self.dealias(name), inp[idx:skip+idx]))
+            for name in value[1:]:  # short
+                if self.hasflag(name):
+                    skip = self.getflag(name).argcount
+                    next_pos = next((i for i, v in enumerate(inp[idx:]) if v.startswith(self.flag_prefix)), len(inp))
+                    if next_pos < skip:
+                        skip = next_pos
+                    flags.append((self.dealias(name), inp[idx:skip+idx]))
+                elif strict:
+                    raise TypeError("Unknown flag `{}{}'".format(value[0], name))
         
+        if strict and len(args) < sum(e not in self._defaults for e in self.arg_map.values()):
+            raise TypeError('Too few positional arguments (expected {}, got {})'.format(
+              sum(e not in self._defaults for e in self.arg_map.values()),
+              len(args)
+              ))
         return flags, args, command
     
-    def do_parse(self, inp=None):
+    def do_parse(self, inp=None, strict=False):
         parsed = {}
         namespaces = {}
-        flags, positionals, command = self._extract_flargs(inp)
+        flags, positionals, command = self._extract_flargs(inp, strict)
         
         for flag, args in flags:
             if self.hasflag(flag):
@@ -447,7 +486,7 @@ class ParserBase(_Handler, HelperMixin):
         
         if command is not None:
             value, idx = command
-            parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(inp[idx:])
+            parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(inp[idx:], strict)
         
         if self._last_arg_consumes and len(positionals) > len(self.args):
             zipped_args = zip_longest(map(self.getarg, self.args), positionals, fillvalue=self.getarg(self.args[-1]))
@@ -470,9 +509,9 @@ class ParserBase(_Handler, HelperMixin):
             )
         return nsp
     
-    def parse(self, inp, *, systemexit=None):
+    def parse(self, inp, *, systemexit=None, strict=False):
         try:
-            return self.do_parse(inp)
+            return self.do_parse(inp, strict)
         except Exception as e:
             if systemexit is None and self.systemexit or systemexit:
                 self.error(e)
