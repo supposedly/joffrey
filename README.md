@@ -165,10 +165,17 @@ Methods:
 - `arg` (decorator):  
     See [`Callbacks`](#callbacks) for more info.  
     
-    `@parser.arg(required=False, help=None, _='-')`  
+    `@parser.arg(n=1, *, namespace=None, required=False, help=None, _='-')`  
     *See identical args of `flag`.*
     
     []()
+    - `n` (`int`, Ellipsis): How many times this argument should be repeated. If `n` is 2, for example,
+        the decorated function will be called on two consecutively-passed command-line arguments.  
+    You can use the `namespace`, as in `flag`, to store info about this argument's values betweeen
+    calls.
+    If `n` is `...` or `Ellipsis`, this arg will consume as many arguments as it can before reaching either a
+    flag or a subcommand.  
+    Intended to be used as a positional argument, as in `@parser.arg(2)` or `@parser.arg(...)`.
 - `clump` (decorator):  
     Each component (AND, OR, XOR) takes an identifier, and any other entity bound to this parser with
     the same identifier is considered part of the same clump.  
@@ -224,10 +231,42 @@ def add(a: int, b: int):
 If this flag is invoked from the command line as `--addition 1 2`, each of `1` and `2` will be given (as a string) to the `int` typehint and thus passed into
 the `add()` function as an integer. (No error would result if the hint were not callable; the command-line value would simply not be converted from a string)
 
-The number of arguments to be passed to a **flag** is determined by the number of parameters its function has; **args**, on the other hand, **only pass one value** to their callbacks.
-A future release of ergo will allow for arguments to be defined as consuming every positional after a certain point, though.
+The number of arguments to be passed to a *flag* is determined by the number of parameters its function has; *args*, on the other hand, **always pass one value** to their callbacks. Flag callbacks are called as many times as the user
+writes the flag's name, and arg callbacks are called as many times as indicated by the `n` argument in @arg()`. As an example for the latter, consider the following setup:
 
-Speaking of consuming, let's take a look at, from above, a more-involved flag-callback example:
+```py
+@parser.arg()  # n = 1
+def integer(value: int):
+    return value
+
+@parser.arg(2, namespace={'accumulate': []})
+def floats(nsp, value: float):
+    nsp.accumulate.append(value)
+    return nsp.accumulate
+
+@parser.arg(..., namespace={'count': 0})
+def num_rest(nsp, _):
+    nsp.count += 1
+    return str(nsp.count)
+```
+
+If this parser.parse() is invoked with the input `1  2.7  3.6  abc  xyz`:
+- The `integer` arg will take one value, the first `1`
+- The `floats` arg has `n = 2`, so it will be called on each of `2.7` and `3.6` in order, each time
+    appending the value to its namespace's `accumulate` list
+- The `num_rest` arg simply counts everything else; it has `n = ...`, so it will consume everything
+    to the right of the previous args until a subcommand or flag is encountered. It will add 1 to
+    its namespace's `count` attribute for each of `abc` and `xyz`
+
+The final namespace returned by this parse will look like this:
+```
+integer: 1
+floats: [2.7, 3.6]
+num_rest: '2'
+```
+
+Speaking of consuming, now, let's take a look at a more-involved flag-callback example. Here's one from
+the [`Example`](#example) above:
 
 ```py
 @parser.flag('addition')

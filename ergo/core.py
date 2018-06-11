@@ -6,7 +6,7 @@ import inspect
 import os
 import sys
 import shlex
-from itertools import chain
+from itertools import chain, zip_longest
 from keyword import iskeyword
 
 from . import errors
@@ -77,7 +77,7 @@ class HelperMixin:
     
     @property
     def all_args(self):
-        return self.args.values()
+        return map(self.getarg, self.args)
     
     @property
     def usage(self):
@@ -124,11 +124,14 @@ class HelperMixin:
 
 class _Handler:
     def __init__(self):
-        self.args = {}
+        self.arg_map = {}
         self.commands = {}
         self.flags = {}
         self._aliases = {}
         self._defaults = {}
+        
+        self.args = []
+        self._last_arg_consumes = False
         
         self._and = ClumpGroup()
         self._or = ClumpGroup()
@@ -163,10 +166,16 @@ class _Handler:
     
     @property
     def entity_names(self):
-        return set(chain(self.args, self.commands, self.flags))
+        return set(chain(self.arg_map, self.commands, self.flags))
     
     def dealias(self, name):
         return self._aliases.get(name, name)
+    
+    def getarg(self, name):
+        try:
+            return self.arg_map[name]
+        except KeyError:
+            return self._aliases[self.arg_map[name]]
     
     def getflag(self, name):
         try:
@@ -187,7 +196,7 @@ class _Handler:
         return name in self.commands or self._aliases.get(name, _Null) in self.commands
     
     def hasany(self, name):
-        return self.hasflag(name) or self.hascmd(name) or name in self.args or self._aliases.get(name, _Null) in self.args
+        return self.hasflag(name) or self.hascmd(name) or name in self.arg_map or self._aliases.get(name, _Null) in self.arg_map
     
     def _clump(self, obj, AND, OR, XOR):
         obj.AND = AND
@@ -280,21 +289,27 @@ class _Handler:
             return entity
         return inner
     
-    def arg(self, required=False, **kwargs):
+    def arg(self, n=1, *, required=False, **kwargs):
         """
-        Expected kwargs: _ (str)
+        n: number of times this arg should be received consecutively; pass ... for infinite
+        Expected kwargs: _ (str), help (str)
         """
         def inner(cb):
+            repeat_count = n
             entity = Entity(cb, **kwargs)
             if required:
                 self._required.add(entity)
-            self.args[entity.name] = entity
+            self.arg_map[entity.name] = entity
+            if repeat_count is ...:
+                self._last_arg_consumes = True
+                repeat_count = 1
+            self.args.extend([entity.name] * repeat_count)
             return entity
         return inner
     
     def flag(self, dest=None, short=_Null, *, default=_Null, namespace=None, required=False, **kwargs):
         """
-        Expected kwargs: _ (str), help (bool)
+        Expected kwargs: _ (str), help (str)
         """
         def inner(cb):
             entity = Flag(cb, namespace=namespace, name=dest, **kwargs)
@@ -340,6 +355,17 @@ class ParserBase(_Handler, HelperMixin):
     def dealias(self, name):
         return next((g.dealias(name) for g in self._groups if g.hasany(name)), super().dealias(name))
     
+    def getarg(self, name):
+        try:
+            return super().getarg(name)
+        except KeyError:
+            for g in self._groups:
+                try:
+                    return g.getarg(name)
+                except KeyError:
+                    pass
+            raise
+    
     def getflag(self, name):
         try:
             return super().getflag(name)
@@ -355,7 +381,7 @@ class ParserBase(_Handler, HelperMixin):
         return super().hasflag(name) or any(g.hasflag(name) for g in self._groups)
     
     def hasany(self, name):
-        return super().hasflag(name) or super().hascmd(name) or name in self.args or self._aliases.get(name, _Null) in self.args
+        return super().hasflag(name) or super().hascmd(name) or name in self.arg_map or self._aliases.get(name, _Null) in self.arg_map
     
     def enforce_clumps(self, parsed):
         p = set(parsed) | {next((g.name for g in self._groups if g.hasany(i)), None) for i in parsed} - {None}
@@ -363,6 +389,15 @@ class ParserBase(_Handler, HelperMixin):
           super().enforce_clumps(p, {g.name: g for g in self._groups})
           and
           all(g.enforce_clumps(parsed) for g in self._groups if g.name in p)
+          )
+    
+    def _put_nsp(self, entity, namespaces, *args, **kwargs):
+        return entity(*args) if entity.namespace is None else entity(
+          namespaces.setdefault(
+            entity.name,
+            ErgoNamespace(**entity.namespace)
+            ),
+          *args, **kwargs
           )
     
     def _extract_flargs(self, inp):
@@ -408,20 +443,19 @@ class ParserBase(_Handler, HelperMixin):
         for flag, args in flags:
             if self.hasflag(flag):
                 entity = self.getflag(flag)
-                parsed[entity.pyname] = entity(*args) if entity.namespace is None else entity(
-                  namespaces.setdefault(
-                    entity.name,
-                    ErgoNamespace(**entity.namespace)
-                    ),
-                  *args
-                  )
+                parsed[entity.pyname] = self._put_nsp(entity, namespaces, *args)
         
         if command is not None:
             value, idx = command
             parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(inp[idx:])
         
-        for (name, entity), value in zip(self.args.items(), positionals):
-            parsed[entity.pyname] = entity(value)
+        if self._last_arg_consumes and len(positionals) > len(self.args):
+            zipped_args = zip_longest(map(self.getarg, self.args), positionals, fillvalue=self.getarg(self.args[-1]))
+        else:
+            zipped_args = zip(map(self.getarg, self.args), positionals)
+        
+        for entity, value in zipped_args:
+            parsed[entity.pyname] = self._put_nsp(entity, namespaces, value)
         
         self.enforce_clumps(parsed)
         
@@ -479,13 +513,13 @@ class SubHandler(_Handler):
 
 
 class Group(SubHandler):
-    def arg(self, required=False):
+    def arg(self, n=1, *, required=False):
         def inner(cb):
             entity = Entity(cb)
             if required:
                 self._required.add(entity)
-            self.args[entity.name] = entity
-            return self.parent.arg(required)(entity.func)
+            self.arg_map[entity.name] = entity
+            return self.parent.arg(n, required=required)(entity.func)
         return inner
 
 

@@ -12,3 +12,10 @@ script:
   - py.test --cov="$ERGO" tests/
 after_success:
   - codecov
+deploy:
+  provider: pypi
+  user: "eltrhn"
+  password:
+    secure: "A/sJiu48WEeBhBWxK4Zmg2GWutgiyE0v0K8TFNjNIpQNXgdEkKBDf4odgtgBPYVyC3ZQZCvkXYBtmGOgH/ZkIzctPNjjEgWGI/If9jLqwGhvLi42JHwk7ZylurB5EZeC7ECkBVlUahK8HdBtHDtnLnEVI/EnZL7YefVDxDJmnMQdga+gDsCjt5flpKNp9Ed3jQT9ygWKKqVJtXOrLgYZR0jGrbvoZq5McBM52vFI4a51gKv8VcOT2cP1xpP0o2ANUZ+50iTJfT3p2Ku2+U9VL24v7HmNFs/uHpqlaIaekHe//w9i0ZTjXegEQ40cqr7zQsbIRcmyqCTxTEigjWlEH6k1jDiNoR4Qi+X54h1Zq+u7acJmBzU+i6BYXCaPI/RuI27W0tr25L5EFkr0iabOSjJTRKHqxi8lnx1fTpKpTsH78AEM3XavgFY62JLjlH4TgbX4oXlqDbyhAqqXWOb5W6z9cwReMeCWMu3JJ36s5uxQoOgailjL4BdqkKmOjvD/GCGDhzGBgRZLAVzEDiipxIGsximbYz/0bQF+4Ro9JC8Ss/I9hs081c3FplbhVF4KbL92KL0PI3zYLcJAvKNavG6dLWTE1XbkxYFleRLkxt0+qo+grL8a6mvv0XhghqfiEEAtnazaVglCKwyAKBXuslxIWY1QZkzvR9zk+35JJ3Q="
+  on:
+    tags: true
