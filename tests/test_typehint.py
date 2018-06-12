@@ -58,8 +58,13 @@ def test_auto(parse):
     assert parse('-A blah').auto2[0] == 'blah'
     with pytest.raises(TypeError):
         parse('-A 1,2,3')
+    
+    with pytest.raises(TypeError):
+        auto(None, 'not a type')
 
 
 def test_booly(parse):
     assert all(parser.parse('-b ' + b).boolish is True for b in ('yes', 'y', 'true', 't', '1'))
     assert all(parser.parse('-b ' + b).boolish is False for b in ('no', 'n', 'false', 'f', '0'))
+    with pytest.raises(ValueError):
+        parser.parse('-b not_a_booleanlike_string')

@@ -57,7 +57,7 @@ class auto:
         self.negated = False
         
         if not all(isinstance(i, type) for i in self.types):
-            raise TypeError('auto() argument "{}" is not a type'.format(
+            raise TypeError("auto() argument '{}' is not a type".format(
               next(i for i in self.types if not isinstance(i, type))
             ))
     
@@ -135,8 +135,9 @@ class ErgoNamespace(SimpleNamespace):
           items=vars(self).items,
           keys=vars(self).keys,
           values=vars(self).values,
-          pretty=(lambda self, sep='\n', delim=': ': sep.join(
-            '{}{}{}'.format(k, delim, v)
-            for k, v in self._.items()
+          pretty=(lambda self, sep='\n', delim=': ':
+            sep.join(
+              '{}{}{}'.format(k, delim, v)
+              for k, v in self._.items()
             )).__get__(self)
           )

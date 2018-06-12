@@ -250,7 +250,7 @@ If this flag is invoked from the command line as `--addition 1 2`, each of `1` a
 the `add()` function as an integer. (No error would result if the hint were not callable; the command-line value would simply not be converted from a string)
 
 The number of arguments to be passed to a *flag* is determined by the number of parameters its function has; *args*, on the other hand, **always pass one value** to their callbacks. Flag callbacks are called as many times as the user
-writes the flag's name, and arg callbacks are called as many times as indicated by the `n` argument in @arg()`. As an example for the latter, consider the following setup:
+writes the flag's name, and arg callbacks are called as many times as indicated by the `n` argument in `@arg()`. As an example for the latter, consider the following setup:
 
 ```py
 @parser.arg()  # n = 1

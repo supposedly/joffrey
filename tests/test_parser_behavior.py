@@ -27,3 +27,20 @@ def test_change_underscore(parser):
     assert 'oh_hello' in parser.parse('--oh.hello')
     assert 'oh_hello' in parser.parse('-e')  # next untaken alphanumeric alias
     assert 'oh_hi' in parser.parse('-o')
+
+
+def test_bad_group_names(parser):
+    with pytest.raises(ValueError):
+        parser.group('def')
+    with pytest.raises(ValueError):
+        parser.group('not an identifier')
+    parser.group('name_conflict')
+    with pytest.raises(ValueError):
+        parser.group('name_conflict')
+
+
+def test_nonexistents(parser):
+    for x in ('remove', 'getarg', 'getflag', 'getcmd'):
+        with pytest.raises(KeyError):
+            getattr(parser, x)('this does not exist')
+    assert not parser.hasany('this also does not exist')

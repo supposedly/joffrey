@@ -53,17 +53,16 @@ class Flag(Entity.cls):
     @property
     def args(self):
         if self._args:
-            return ' '.join(self._args[:-1]) + ' {}{}'.format(
+            return ' ' + ' '.join(self._args[:-1]) + ' {}{}'.format(
               '*' if self.argcount == sys.maxsize else '',
               self._args[-1]
               )
         return ''
     
     def __str__(self):
-        space = ' ' if self._args else ''
         if self.short is None:
-            return '[--{}{s}{}]'.format(self.name, self.args, s=space)
-        return '[-{} | --{}{s}{}]'.format(self.short, self.name, self.args, s=space)
+            return '[--{}{}]'.format(self.name, self.args)
+        return '[-{} | --{}{}]'.format(self.short, self.name, self.args)
 
 
 class HelperMixin:
@@ -176,12 +175,13 @@ class _Handler:
             name = name.pyname
         if name in self.arg_map:
             del self.arg_map[name]
-            self.args[:] = list(filter(name.__eq__, self.args))
+            self.args = list(filter(name.__eq__, self.args))
         else:
             try:
                 del next(filter(lambda c: name in c, (self.commands, self.flags)))[name]
             except StopIteration:
                 raise KeyError('No such entity')
+        self._aliases = {k: v for k, v in self._aliases.items() if v != name}
     
     def getarg(self, name):
         try:
@@ -373,11 +373,9 @@ class ParserBase(_Handler, HelperMixin):
         except KeyError:
             for g in self._groups:
                 try:
-                    g.remove(name)
+                    return g.remove(name)
                 except KeyError:
                     pass
-                else:
-                    return
             raise
     
     def getarg(self, name):
@@ -406,7 +404,7 @@ class ParserBase(_Handler, HelperMixin):
         return super().hasflag(name) or any(g.hasflag(name) for g in self._groups)
     
     def hasany(self, name):
-        return super().hasflag(name) or super().hascmd(name) or name in self.arg_map or self._aliases.get(name, _Null) in self.arg_map
+        return super().hasany(name) or self._aliases.get(name, _Null) in self.arg_map
     
     def enforce_clumps(self, parsed):
         p = set(parsed) | {next((g.name for g in self._groups if g.hasany(i)), None) for i in parsed} - {None}

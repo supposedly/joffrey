@@ -69,3 +69,11 @@ def test_namespaces_stateless():
     first = parser.parse('foo -S a -vvvv')
     second = parser.parse('foo -vvvv -S a')
     assert first.verbosity == second.verbosity == 4
+
+
+def test_parser_namespace_attrs():
+    nsp = parser.parse('foo -S aaa -v')
+    assert (not nsp) is False
+    assert nsp._.items() == vars(nsp).items()
+    assert nsp.verbosity == nsp['verbosity']
+    assert repr(next(iter(parser._xor)))  # useless but im about that 100% clumps.py codecov
