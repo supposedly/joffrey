@@ -1,5 +1,6 @@
 import inspect
 import sys
+from copy import deepcopy
 
 from .misc import multiton, typecast, _Null
 
@@ -11,14 +12,18 @@ class Entity:
     def __init__(self, func, *, name=None, namespace=None, help=None):
         params = inspect.signature(func).parameters
         has_nsp = bool(namespace)
+        self._namespace = namespace
         self._args = [i.upper() for i in params][has_nsp:]
         self.argcount = sys.maxsize if any(i.kind == VAR_POS for i in params.values()) else len(params) - has_nsp
         self.func, self.callback = func, typecast(func)
         self.help = func.__doc__ or '' if help is None else help
         self.identifier = name or func.__name__
         self.name = self.identifier
-        self.namespace = namespace
         self.AND = self.OR = self.XOR = _Null
+    
+    @property
+    def namespace(self):
+        return deepcopy(self._namespace)
     
     def __call__(self, *args, **kwargs):
         return self.callback(*args, **kwargs)
