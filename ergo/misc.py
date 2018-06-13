@@ -5,6 +5,15 @@ from itertools import zip_longest
 from types import SimpleNamespace
 
 
+_Null = type(
+  '_NullType', (),
+  {
+    '__bool__': lambda self: False,
+    '__repr__': lambda self: '<_Null>',
+  }
+  )()
+
+
 def typecast(func):
     params = inspect.signature(func).parameters.values()
     defaults = [p.default for p in params]

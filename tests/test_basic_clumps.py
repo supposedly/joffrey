@@ -76,4 +76,3 @@ def test_parser_namespace_attrs():
     assert (not nsp) is False
     assert nsp._.items() == vars(nsp).items()
     assert nsp.verbosity == nsp['verbosity']
-    assert repr(next(iter(parser._xor)))  # useless but im about that 100% clumps.py codecov

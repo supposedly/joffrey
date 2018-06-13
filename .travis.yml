@@ -3,6 +3,11 @@ python:
   - "3.6"
   - "3.5"
 cache: pip
+git:
+  depth: false
+branches:
+  only:
+    - master
 install:
   - pip install pytest pytest-cov codecov
 before_script:

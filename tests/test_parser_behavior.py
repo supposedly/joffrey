@@ -40,6 +40,7 @@ def test_bad_group_names(parser):
 
 
 def test_nonexistents(parser):
+    parser.group('for_codecov')  # causes the `for g in self._groups` loops to run
     for x in ('remove', 'getarg', 'getflag', 'getcmd'):
         with pytest.raises(KeyError):
             getattr(parser, x)('this does not exist')

@@ -2,7 +2,6 @@
 argparse sucks
 this sucks too but less
 """
-import inspect
 import os
 import sys
 import shlex
@@ -10,59 +9,12 @@ from itertools import chain, zip_longest
 from keyword import iskeyword
 
 from . import errors
-from .misc import typecast, multiton, ErgoNamespace
 from .clumps import And, Or, Xor, ClumpGroup
+from .entity import Entity, Arg, Flag
+from .misc import ErgoNamespace, _Null
 
 
 _FILE = os.path.basename(sys.argv[0])
-_Null = type(
-  '_NullType', (),
-  {
-    '__bool__': lambda self: False,
-    '__repr__': lambda self: '<_Null>',
-  }
-  )()
-
-
-@multiton(kw=False)
-class Entity:
-    def __init__(self, func, *, name=None, namespace=None, help=None, _='-'):
-        params = inspect.signature(func).parameters
-        self._args = [i.upper() for i in params][bool(namespace):]
-        self.argcount = sys.maxsize if any(i.kind == 2 for i in params.values()) else len(params) - bool(namespace)
-        self.func, self.callback = func, typecast(func)
-        self.help = func.__doc__ or '' if help is None else help
-        self.pyname = name or func.__name__
-        self.name = self.pyname.replace('_', _)
-        self.namespace = namespace
-        self.AND = self.OR = self.XOR = _Null
-    
-    def __call__(self, *args, **kwargs):
-        return self.callback(*args, **kwargs)
-    
-    def __str__(self):
-        return "`{}'".format(self.name)
-
-
-@multiton(cls=Entity.cls, kw=False)
-class Flag(Entity.cls):
-    def __init__(self, *args, **kwargs):
-        self.short = None
-        super().__init__(*args, **kwargs)
-    
-    @property
-    def args(self):
-        if self._args:
-            return ' ' + ' '.join(self._args[:-1]) + ' {}{}'.format(
-              '*' if self.argcount == sys.maxsize else '',
-              self._args[-1]
-              )
-        return ''
-    
-    def __str__(self):
-        if self.short is None:
-            return '[--{}{}]'.format(self.name, self.args)
-        return '[-{} | --{}{}]'.format(self.short, self.name, self.args)
 
 
 class HelperMixin:
@@ -170,9 +122,8 @@ class _Handler:
     def dealias(self, name):
         return self._aliases.get(name, name)
     
-    def remove(self, name):
-        if isinstance(name, Entity.cls):
-            name = name.pyname
+    def remove(self, obj):
+        name = obj.identifier if isinstance(obj, Entity.cls) else obj
         if name in self.arg_map:
             del self.arg_map[name]
             self.args = list(filter(name.__eq__, self.args))
@@ -301,17 +252,17 @@ class _Handler:
             return entity
         return inner
     
-    def arg(self, n=1, *, required=False, **kwargs):
+    def arg(self, n=1, *, required=False, namespace=None, help=None):
         """
         n: number of times this arg should be received consecutively; pass ... for infinite
         Expected kwargs: _ (str), help (str)
         """
         def inner(cb):
             repeat_count = n
-            entity = Entity(cb, **kwargs)
+            entity = Arg(cb, n, namespace=namespace, help=help)
+            self.arg_map[entity.name] = entity
             if required:
                 self._required.add(entity)
-            self.arg_map[entity.name] = entity
             if repeat_count is ...:
                 self._last_arg_consumes = True
                 repeat_count = 1
@@ -319,12 +270,9 @@ class _Handler:
             return entity
         return inner
     
-    def flag(self, dest=None, short=_Null, *, default=_Null, namespace=None, required=False, **kwargs):
-        """
-        Expected kwargs: _ (str), help (str)
-        """
+    def flag(self, dest=None, short=_Null, *, default=_Null, namespace=None, required=False, help=None, _='-'):
         def inner(cb):
-            entity = Flag(cb, namespace=namespace, name=dest, **kwargs)
+            entity = Flag(cb, namespace=namespace, name=dest, help=help, _=_)
             if dest is not None:
                 self._aliases[cb.__name__] = entity.name
             if short is not None:  # _Null == default; None == none
@@ -480,7 +428,7 @@ class ParserBase(_Handler, HelperMixin):
         for flag, args in flags:
             if self.hasflag(flag):
                 entity = self.getflag(flag)
-                parsed[entity.pyname] = self._put_nsp(entity, namespaces, *args)
+                parsed[entity.identifier] = self._put_nsp(entity, namespaces, *args)
         
         if command is not None:
             value, idx = command
@@ -492,7 +440,7 @@ class ParserBase(_Handler, HelperMixin):
             zipped_args = zip(map(self.getarg, self.args), positionals)
         
         for entity, value in zipped_args:
-            parsed[entity.pyname] = self._put_nsp(entity, namespaces, value)
+            parsed[entity.identifier] = self._put_nsp(entity, namespaces, value)
         
         self.enforce_clumps(parsed)
         
