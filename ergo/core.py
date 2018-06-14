@@ -112,10 +112,6 @@ class _Handler:
         return self._xor
     
     @property
-    def _req_names(self):
-        return {e.name for e in self._required}
-    
-    @property
     def entity_names(self):
         return set(chain(self.arg_map, self.commands, self.flags))
     
@@ -232,7 +228,7 @@ class _Handler:
         for all_failed, not_received in self._xor.failures(parsed):
             # XOR failure == member of an XOR clump that was given alongside at least one other
             # an XOR failure is okay if it satisfies an AND clump (i.e. all other ANDs in its clump were given)
-            not_exempt = (all_failed - not_received) - elim['AND'] - self._req_names
+            not_exempt = (all_failed - not_received) - elim['AND'] - self._required
             if len(not_exempt) > 1:
                 raise errors.XORError(
                   'Expected no more than one of the following flags/arguments: {}\n(Got {})'.format(
@@ -262,8 +258,8 @@ class _Handler:
             entity = Arg(cb, n, namespace=namespace, help=help)
             self.arg_map[entity.name] = entity
             if required:
-                self._required.add(entity)
-            if repeat_count is ...:
+                self._required.add(entity.name)
+            if repeat_count is Ellipsis:
                 self._last_arg_consumes = True
                 repeat_count = 1
             self.args.extend([entity.name] * repeat_count)
@@ -285,7 +281,7 @@ class _Handler:
             if default is not _Null:
                 self._defaults[entity.name] = default
             if required:
-                self._required.add(entity)
+                self._required.add(entity.name)
             self.flags[entity.name] = entity
             return entity
         return inner
@@ -447,10 +443,10 @@ class ParserBase(_Handler, HelperMixin):
         final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
         nsp = ErgoNamespace(**final)
         
-        if self._req_names.difference(nsp):
+        if self._required.difference(nsp):
             raise errors.RequirementError('Expected the following required arguments: {}\nGot {}'.format(
-              ", ".join(map(repr, self._req_names)),
-              ", ".join(map(repr, self._req_names.intersection(nsp))) or 'none'
+              ", ".join(map(repr, self._required)),
+              ", ".join(map(repr, self._required.intersection(nsp))) or 'none'
               )
             )
         return nsp
@@ -470,7 +466,7 @@ class ParserBase(_Handler, HelperMixin):
             raise ValueError('Invalid group name: ' + name)
         group = Group(self, name)
         if required:
-            self._required.add(group)
+            self._required.add(group.name)
         self._clump(group, AND, OR, XOR)
         setattr(self, name, group)
         self._groups.add(group)
@@ -502,7 +498,7 @@ class Group(SubHandler):
         def inner(cb):
             entity = Entity(cb)
             if required:
-                self._required.add(entity)
+                self._required.add(entity.name)
             self.arg_map[entity.name] = entity
             return self.parent.arg(n, required=required)(entity.func)
         return inner

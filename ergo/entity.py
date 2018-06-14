@@ -4,6 +4,7 @@ from copy import deepcopy
 
 from .misc import multiton, typecast, _Null
 
+
 VAR_POS = inspect.Parameter.VAR_POSITIONAL
 
 
@@ -56,7 +57,7 @@ class Arg(Entity.cls):
     def __init__(self, cb, repeat_count, **kwargs):
         super().__init__(cb, **kwargs)
         self.name = self.identifier
-        self.repcount = '...' if repeat_count is ... else repeat_count
+        self.repcount = '...' if repeat_count is Ellipsis else repeat_count
     
     def __str__(self):
         return '{}({})'.format(self.identifier, self.repcount)
