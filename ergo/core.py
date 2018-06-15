@@ -5,6 +5,7 @@ this sucks too but less
 import os
 import sys
 import shlex
+from functools import partial
 from itertools import chain, zip_longest
 from keyword import iskeyword
 
@@ -31,7 +32,7 @@ class HelperMixin:
         return map(self.getarg, self.args)
     
     @property
-    def usage(self):
+    def usage_info(self):
         return '{}{} {} {}'.format(
           _FILE,
           str(self),
@@ -40,12 +41,12 @@ class HelperMixin:
           )
     
     @property
-    def help(self):
+    def help_info(self):
         return '\n'.join(
           '{}\n{}'.format(
             label.upper(),
             '\n'.join({
-              '\t{: <15} {}'.format(i.name, i.help)
+              '\t{: <15} {}'.format(i.name, i.brief)
               for i in getattr(self, 'all_' + label)
             }),
           )
@@ -53,15 +54,15 @@ class HelperMixin:
         )
     
     def format_help(self, usage=True, commands=True):
-        built = ['']
+        built = []
         if usage:
-            built.append('usage: {}'.format(self.usage))
+            built.append('usage: {}'.format(self.usage_info))
         if commands and self.commands:
             built.append('subcommands: {}'.format(','.join(map(str, self.all_commands))))
         if usage or commands:
             built.append('')
-        built.append(self.help)
-        return '\n'.join(built)
+        built.append(self.help_info)
+        return '\n' + '\n'.join(built)
     
     def print_help(self, usage=True, commands=True):
         print(self.format_help(usage, commands), end='\n\n')
@@ -71,6 +72,16 @@ class HelperMixin:
         if exc is None:
             raise SystemExit
         raise SystemExit(exc if str(exc) else type(exc))
+    
+    def help(self, name=None):
+        if name is None:
+            self.error()
+        try:
+            print('', self.get(name).man, sep='\n', end='\n\n')
+        except AttributeError:
+            print('No helpable entity named {!r}'.format(name))
+        finally:
+            raise SystemExit
 
 
 class _Handler:
@@ -127,8 +138,16 @@ class _Handler:
             try:
                 del next(filter(lambda c: name in c, (self.commands, self.flags)))[name]
             except StopIteration:
-                raise KeyError('No such entity')
+                raise KeyError('No such entity: {}'.format(obj))
         self._aliases = {k: v for k, v in self._aliases.items() if v != name}
+    
+    def get(self, name):
+        for func in (self.getarg, self.getflag, self.getcmd):
+            try:
+                return func(name)
+            except KeyError:
+                pass
+        return None
     
     def getarg(self, name):
         try:
@@ -142,14 +161,14 @@ class _Handler:
         except KeyError:
             return self.flags[self._aliases[name]]
     
-    def hasflag(self, name):
-        return name in self.flags or self._aliases.get(name, _Null) in self.flags
-    
     def getcmd(self, name):
         try:
             return self.commands[name]
         except KeyError:
             return self.commands[self._aliases[name]]
+    
+    def hasflag(self, name):
+        return name in self.flags or self._aliases.get(name, _Null) in self.flags
     
     def hascmd(self, name):
         return name in self.commands or self._aliases.get(name, _Null) in self.commands
@@ -306,46 +325,52 @@ class ParserBase(_Handler, HelperMixin):
         if not flag_prefix:
             raise ValueError('Flag prefix cannot be empty')
         if not no_help:
-            self.flags['help'] = self.flag('help', help='Prints help and exits')(lambda: self.error())
+            self.flags['help'] = self.flag('help', help='Prints help and exits')(lambda name=None: self.help(name))
     
     def dealias(self, name):
-        return next((g.dealias(name) for g in self._groups if g.hasany(name)), super().dealias(name))
-    
-    def remove(self, name):
         try:
-            super().remove(name)
-        except KeyError:
-            for g in self._groups:
-                try:
-                    return g.remove(name)
-                except KeyError:
-                    pass
-            raise
+            return next(g.dealias(name) for g in self._groups if g.hasany(name))
+        except StopIteration:
+            return super().dealias(name)
+    
+    def remove(self, obj):
+        name = obj.name if isinstance(obj, Entity.cls) else obj
+        for g in self._groups:
+            try:
+                return g.remove(name)
+            except KeyError:
+                pass
+        return super().remove(name)
+    
+    def get(self, name):
+        try:
+            return next(g.get(name) for g in self._groups if g.hasany(name))
+        except StopIteration:
+            return super().get(name)
     
     def getarg(self, name):
         try:
+            return next(g.getarg(name) for g in self._groups if name in g.arg_map)
+        except StopIteration:
             return super().getarg(name)
-        except KeyError:
-            for g in self._groups:
-                try:
-                    return g.getarg(name)
-                except KeyError:
-                    pass
-            raise
     
     def getflag(self, name):
         try:
+            return next(g.getflag(name) for g in self._groups if g.hasflag(name))
+        except StopIteration:
             return super().getflag(name)
-        except KeyError:
-            for g in self._groups:
-                try:
-                    return g.getflag(name)
-                except KeyError:
-                    pass
-            raise
+    
+    def getcmd(self, name):
+        try:
+            return next(g.getcmd(name) for g in self._groups if g.hascmd(name))
+        except StopIteration:
+            return super().getcmd(name)
     
     def hasflag(self, name):
         return super().hasflag(name) or any(g.hasflag(name) for g in self._groups)
+    
+    def hascmd(self, name):
+        return super().hascmd(name) or any(g.hascmd(name) for g in self._groups)
     
     def hasany(self, name):
         return super().hasany(name) or self._aliases.get(name, _Null) in self.arg_map
@@ -358,13 +383,13 @@ class ParserBase(_Handler, HelperMixin):
           all(g.enforce_clumps(parsed) for g in self._groups if g.name in p)
           )
     
-    def _put_nsp(self, entity, namespaces, *args, **kwargs):
-        return entity(*args) if entity.namespace is None else entity(
+    def _put_nsp(self, namespaces, entity):
+        return entity if entity.namespace is None else partial(
+          entity,
           namespaces.setdefault(
             entity.name,
             ErgoNamespace(**entity.namespace)
             ),
-          *args, **kwargs
           )
     
     def _extract_flargs(self, inp, strict=False):
@@ -387,6 +412,11 @@ class ParserBase(_Handler, HelperMixin):
                       len(self.args), len(args)
                       ))
                 continue
+            
+            if '=' in value:
+                name, arg = value.lstrip(self.flag_prefix).split('=', 1)
+                if self.hasflag(name):
+                    flags.append((self.dealias(name), [arg] if arg else []))
             
             if value.startswith(self.long_prefix):
                 if self.hasflag(value.lstrip(self.flag_prefix)):  # long
@@ -420,11 +450,12 @@ class ParserBase(_Handler, HelperMixin):
         parsed = {}
         namespaces = {}
         flags, positionals, command = self._extract_flargs(inp, strict)
+        prep = partial(self._put_nsp, namespaces)
         
         for flag, args in flags:
             if self.hasflag(flag):
                 entity = self.getflag(flag)
-                parsed[entity.identifier] = self._put_nsp(entity, namespaces, *args)
+                parsed[entity.identifier] = prep(entity)(*args)
         
         if command is not None:
             value, idx = command
@@ -436,7 +467,7 @@ class ParserBase(_Handler, HelperMixin):
             zipped_args = zip(map(self.getarg, self.args), positionals)
         
         for entity, value in zipped_args:
-            parsed[entity.identifier] = self._put_nsp(entity, namespaces, value)
+            parsed[entity.identifier] = prep(entity)(value)
         
         self.enforce_clumps(parsed)
         
@@ -494,13 +525,37 @@ class SubHandler(_Handler):
 
 
 class Group(SubHandler):
-    def arg(self, n=1, *, required=False):
+    def arg(self, n=1, **kwargs):
+        """
+        n: number of times this arg should be received consecutively; pass ... for infinite
+        Expected kwargs: _ (str), help (str)
+        """
         def inner(cb):
-            entity = Entity(cb)
-            if required:
-                self._required.add(entity.name)
+            entity = Arg(cb, n, namespace=kwargs.get('namespace'), help=kwargs.get('help'))
             self.arg_map[entity.name] = entity
-            return self.parent.arg(n, required=required)(entity.func)
+            if kwargs.get('required'):
+                self._required.add(entity.name)
+            return self.parent.arg(n, **kwargs)(entity.func)
+        return inner
+    
+    def flag(self, dest=None, short=_Null, **kwargs):
+        def inner(cb):
+            entity = Flag(cb, namespace=kwargs.get('namespace'), name=dest, help=kwargs.get('help'), _=kwargs.get('_', '-'))
+            if dest is not None:
+                self._aliases[cb.__name__] = entity.name
+            if short is not None:  # _Null == default; None == none
+                try:
+                    entity.short = short or next(s for s in entity.name if s.isalnum() and s not in self._aliases)
+                except StopIteration:
+                    pass
+                else:
+                    self._aliases[entity.short] = entity.name
+            if kwargs.get('default', _Null) is not _Null:  # could be `in` but we don't want them using _Null
+                self._defaults[entity.name] = kwargs['default']
+            if kwargs.get('required'):
+                self._required.add(entity.name)
+            self.flags[entity.name] = entity
+            return self.parent.flag(dest, short, **kwargs)(entity.func)
         return inner
 
 

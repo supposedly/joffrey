@@ -14,10 +14,11 @@ class Entity:
         params = inspect.signature(func).parameters
         has_nsp = bool(namespace)
         self._namespace = namespace
-        self._args = [i.upper() for i in params][has_nsp:]
+        self.params = list(params)[has_nsp:]
         self.argcount = sys.maxsize if any(i.kind == VAR_POS for i in params.values()) else len(params) - has_nsp
         self.func, self.callback = func, typecast(func)
-        self.help = func.__doc__ or '' if help is None else help
+        self.help = inspect.cleandoc(func.__doc__ or '' if help is None else help)
+        self.brief = next(iter(self.help.split('\n')), '')
         self.identifier = name or func.__name__
         self.name = self.identifier
         self.AND = self.OR = self.XOR = _Null
@@ -25,6 +26,12 @@ class Entity:
     @property
     def namespace(self):
         return deepcopy(self._namespace)
+    
+    @property
+    def man(self):
+        return '{}\n\n{}'.format(
+          self, self.help
+          )
     
     def __call__(self, *args, **kwargs):
         return self.callback(*args, **kwargs)
@@ -39,10 +46,10 @@ class Flag(Entity.cls):
     
     @property
     def args(self):
-        if self._args:
-            return ' ' + ' '.join(self._args[:-1]) + ' {}{}'.format(
+        if self.params:
+            return ' '[self.argcount == 1:] + ' '.join(map(str.upper, self.params[:-1])) + ' {}{}'.format(
               '*' if self.argcount == sys.maxsize else '',
-              self._args[-1]
+              self.params[-1].upper()
               )
         return ''
     
