@@ -56,8 +56,10 @@ def state(num):
 
 
 def test_no_and_failure():
-    """This used to not work"""
-    parser.parse('foo -f 10')
+    """This (disregarding equals vs space) used to not work"""
+    a = parser.parse('foo -f 10')
+    b = parser.parse('foo -f=10')
+    assert a == b
 
 
 def test_clump_failures():

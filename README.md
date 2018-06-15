@@ -82,7 +82,7 @@ Expected no more than one of the following flags/arguments: 'addition', ['scream
 ```
 And the mysterious `help/usage info...`:
 ```
-usage: <filename here> [-h | --help] [-a | --addition A *B] [-S | --scream  TEXT] [-v | --verbosity] `name'
+usage: <filename here> [-h | --help (NAME)] [-a | --addition (A) *B] [-S | --scream TEXT] [-v | --verbosity] name(1)
 
 ARGS
 	name            Args, positional, are parsed in the order they're added in
@@ -92,7 +92,7 @@ FLAGS
 	help            Prints help and exits
 	verbosity       This does nothing but it shows namespaces (which are always passed as the first arg)
 ```
-(To get rid of the default `help` flag, pass `no_help=True` to `Parser()`)
+(The default `help` flag To get rid of the default `help` flag, pass `no_help=True` to `Parser()`)
 
 The only things not decorator-based are "groups" and "commands". Commands (subparsers) are parsers that have a 'name' attribute,
 and groups -- demo'd above -- are applied their clump settings as a whole rather than applying them to each individual
@@ -160,7 +160,7 @@ Methods:
     - `required` (`bool`): Whether to error if this flag is not provided (independent of clump settings; do not use this with `XOR`, for instance).
     - `help`: Help text to appear alongside this flag. If not provided, will be grabbed if present from the decorated function's `__doc__`.
     - `_`: Determines how to replace underscores in the flag's name (be the name from `dest` or the function's `__name__`). Default `'-'`, meaning
-        that a flag named `check_twice` will be invoked as `--check-twice` (if `_='.'`, then `--check.twice`). Final output will still use the
+        that a flag named `check_twice` will be invoked as `--check-twice` (or if `_='.'`, then `--check.twice`). Final output will still use the
         original pre-replacement name, however.
 - `arg` (decorator):  
     See [`Callbacks`](#callbacks) for more info.  
@@ -173,8 +173,8 @@ Methods:
         the decorated function will be called on two consecutively-passed command-line arguments.  
     You can use the `namespace`, as in `flag`, to store info about this argument's values betweeen
     calls.
-    If `n` is `...` or `Ellipsis`, this arg will consume as many arguments as it can before reaching either a
-    flag or a subcommand.  
+    If `n` is `...` or `Ellipsis`, this arg will consume as many arguments as it can (excluding flags)
+    before reaching either a flag or a subcommand.  
     Intended to be used as a positional argument, as in `@parser.arg(2)` or `@parser.arg(...)`.
 - `clump` (decorator):  
     Each component (AND, OR, XOR) takes an identifier, and any other entity bound to this parser with
@@ -273,7 +273,7 @@ If this parser.parse() is invoked with the input `1  2.7  3.6  abc  xyz`:
 - The `floats` arg has `n = 2`, so it will be called on each of `2.7` and `3.6` in order, each time
     appending the value to its namespace's `accumulate` list
 - The `num_rest` arg simply counts everything else; it has `n = ...`, so it will consume everything
-    to the right of the previous args until a subcommand or flag is encountered. It will add 1 to
+    to the right of the previous args, excluding flags, until a subcommand or EOF is encountered. It will add 1 to
     its namespace's `count` attribute for each of `abc` and `xyz`
 
 The final namespace returned by this parse will look like this:
@@ -300,7 +300,7 @@ default argument, similarly, just allows the callback to not error if the user d
 
 If this callback were invoked as...
 - `--addition 1 2`: would return `3`
-- `--addition 1 2 3 4 5 ... n` would return `sum(range(1, n))` inclusive
+- `--addition 1 2 3 4 5 ... n`: would return `sum(range(1, n))` inclusive
 - `--addition 1`: would return `1`
 - `--addition`: would return `4` (default argument)
 

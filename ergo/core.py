@@ -417,6 +417,9 @@ class ParserBase(_Handler, HelperMixin):
                 name, arg = value.lstrip(self.flag_prefix).split('=', 1)
                 if self.hasflag(name):
                     flags.append((self.dealias(name), [arg] if arg else []))
+                elif strict:
+                    raise TypeError("Unknown flag `{}'".format(value.split('=')[0]))
+                continue
             
             if value.startswith(self.long_prefix):
                 if self.hasflag(value.lstrip(self.flag_prefix)):  # long
@@ -455,6 +458,7 @@ class ParserBase(_Handler, HelperMixin):
         for flag, args in flags:
             if self.hasflag(flag):
                 entity = self.getflag(flag)
+                print(flag, args)
                 parsed[entity.identifier] = prep(entity)(*args)
         
         if command is not None:

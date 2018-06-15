@@ -34,9 +34,12 @@ def test_strict():
         parser.parse('-x', strict=True)  # Unknown flag
     with pytest.raises(TypeError) as flag_exc_long:
         parser.parse('--ecks', strict=True)  # Unknown flag
+    with pytest.raises(TypeError) as flag_exc_equals:
+        parser.parse('-a=aaa', strict=True)  # Unknown flag
     assert str(arg_exc.value).startswith('Too few positional')
     assert str(flag_exc_short.value).startswith('Unknown flag')
     assert str(flag_exc_long.value).startswith('Unknown flag')
+    assert str(flag_exc_equals.value).startswith('Unknown flag')
 
 
 def test_too_many():

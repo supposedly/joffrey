@@ -16,6 +16,17 @@ class Entity:
         self._namespace = namespace
         self.params = list(params)[has_nsp:]
         self.argcount = sys.maxsize if any(i.kind == VAR_POS for i in params.values()) else len(params) - has_nsp
+        _first_optional = next((i for i, v in enumerate(params.values()) if v.default is not inspect._empty), sys.maxsize)
+        self._normalized_params = [''] + [
+          ('({})'.format(v) if i >= _first_optional else v).upper()
+          for i, v in enumerate(self.params[:-1])
+          ]
+        if self.params:
+            s = self.params[-1]
+            if self.argcount == sys.maxsize:
+                self._normalized_params.append('*{}'.format(s).upper())
+            else:
+                self._normalized_params.append(('({})'.format(s) if len(params) >= _first_optional else s).upper())
         self.func, self.callback = func, typecast(func)
         self.help = inspect.cleandoc(func.__doc__ or '' if help is None else help)
         self.brief = next(iter(self.help.split('\n')), '')
@@ -46,12 +57,7 @@ class Flag(Entity.cls):
     
     @property
     def args(self):
-        if self.params:
-            return ' '[self.argcount == 1:] + ' '.join(map(str.upper, self.params[:-1])) + ' {}{}'.format(
-              '*' if self.argcount == sys.maxsize else '',
-              self.params[-1].upper()
-              )
-        return ''
+        return ' '.join(self._normalized_params) if self.params else ''
     
     def __str__(self):
         if self.short is None:

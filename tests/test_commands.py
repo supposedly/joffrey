@@ -39,6 +39,14 @@ def test_ok_1():
     assert done.name == 'test'
 
 
+def test_help():
+        parser.format_help()  # codecov...
+        with pytest.raises(SystemExit):
+            parser.help()
+        with pytest.raises(SystemExit):
+            parser.help('verbose')
+
+
 def test_subparser_consumes_everything():
     first = parser.parse('test int 1')
     second = parser.parse('int 1 test')

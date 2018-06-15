@@ -29,7 +29,7 @@ def verbose(nsp):
 
 @parser.clump(XOR=0)
 @parser.flag('addition')
-def add(a: int, *b: int):
+def add(a: int = 4, *b: int):
     """Who needs a calculator"""
     return a + sum(b)
 
