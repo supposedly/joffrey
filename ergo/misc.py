@@ -32,7 +32,8 @@ def typecast(func):
         if not callable(kw_annot.get(None)):
             kw_annot[None] = lambda x: x
         if len(args) < num_expected:  # TODO: do this for kwargs as well (although kwargs won't be an ergo thing)
-            raise TypeError("{}() expected at least {} arguments, got {}".format(func.__name__, num_expected, len(args)))
+            func(*args)  # will raise Python's error
+            # raise TypeError("{}() expected at least {} argument/s, got {}".format(func.__name__, num_expected, len(args)))
         if len(args) < len(pos_annot):
             pos_annot = [i < len(args) and v for i, v in enumerate(pos_annot)]
             args = (*args, *defaults[len(args):])

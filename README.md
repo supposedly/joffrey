@@ -151,7 +151,7 @@ Methods:
     - `dest` (`str`): The name this flag will be referenced by from the command line (with long prefix), as well as the name it will
         appear as in the final `Parser.parse()` output. Defaults to the decorated function's `__name__`.
     - `short` (`str`): This flag's single-character short alias, to be used from the command line with `parser.flag_prefix`. If `None`,
-        no short alias will be made; if left alone (i.e. passed `ergo.core._Null`), defaults to the first alphanumeric character in the
+        no short alias will be made; if left alone (i.e. passed `ergo.misc._Null`), defaults to the first alphanumeric character in the
         decorated function's `__name__`.
     - `default`: Default value of this flag if not invoked during parsing. (no default value if `_Null`)
     - `namespace` (`dict`): The starting values for this flag's "namespace", a `types.SimpleNamespace` object passed as the first argument

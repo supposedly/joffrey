@@ -177,9 +177,6 @@ class _Handler:
         return self.hasflag(name) or self.hascmd(name) or name in self.arg_map or self._aliases.get(name, _Null) in self.arg_map
     
     def _clump(self, obj, AND, OR, XOR):
-        obj.AND = AND
-        obj.OR = OR
-        obj.XOR = XOR
         if AND is not _Null:
             self._and.add(And(AND, self))
             And(AND, self).add(obj)
@@ -458,7 +455,6 @@ class ParserBase(_Handler, HelperMixin):
         for flag, args in flags:
             if self.hasflag(flag):
                 entity = self.getflag(flag)
-                print(flag, args)
                 parsed[entity.identifier] = prep(entity)(*args)
         
         if command is not None:
@@ -512,7 +508,6 @@ class SubHandler(_Handler):
     def __init__(self, parent, name):
         self.name = name
         self.parent = parent
-        self.AND = self.OR = self.XOR = _Null
         super().__init__()
     
     @property

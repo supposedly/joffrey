@@ -2,7 +2,7 @@ import inspect
 import sys
 from copy import deepcopy
 
-from .misc import multiton, typecast, _Null
+from .misc import multiton, typecast
 
 
 VAR_POS = inspect.Parameter.VAR_POSITIONAL
@@ -32,7 +32,6 @@ class Entity:
         self.brief = next(iter(self.help.split('\n')), '')
         self.identifier = name or func.__name__
         self.name = self.identifier
-        self.AND = self.OR = self.XOR = _Null
     
     @property
     def namespace(self):
