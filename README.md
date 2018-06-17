@@ -82,7 +82,7 @@ Expected no more than one of the following flags/arguments: 'addition', ['scream
 ```
 And the mysterious `help/usage info...`:
 ```
-usage: <filename here> [-h | --help (NAME)] [-a | --addition (A) *B] [-S | --scream TEXT] [-v | --verbosity] name(1)
+usage: <filename here> [-h | --help (NAME)] [-a | --addition (A) B...] [-S | --scream TEXT] [-v | --verbosity] name(1)
 
 ARGS
 	name            Args, positional, are parsed in the order they're added in
@@ -109,18 +109,24 @@ cmd = parser.command('etc')  # first arg is name
 
 ## Why?
 I needed a way to define sort-of-complex interdependencies between command-line options. None of the available libs
-I found were able to handle this out of the box to an acceptable degree, so I decided to try my own hand;
+I found\* were able to handle this out of the box to an acceptable degree, so I decided to try my own hand;
 I feel like the lib should be able to handle this stuff itself, without your needing to delegate roles like *"check
 that these two flags aren't used at the same time as this arg"* or *"make sure all these things appear
 together, or alternatively that this second thing does"* to external functions or post-parsing if-statements.
 
-Ergo, by the way, is still early in alpha. If it really doesn't solve the same problem for you that it does for me,
+*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which does have the
+same concepts as ergo's AND/OR/XOR clumps (by the names of "requires", "wants", and "conflicts"), albeit with
+some strange design choices overall that I think would be somewhat disagreeable to most. I also found
+[argh](https://argh.readthedocs.io/en/latest/index.html) at around the same time, which despite not solving
+the clumping issue appears to (by pure coincidence) share a number of features with ergo. The project does
+depend on argparse underneath and also looks to be inactive, however, so I'd say ergo's still okay.
+
+Ergo, by the way, is still early in alpha. If it really doesn't solve the same problems for you that it does for me,
 I think you'd be better off trying something else; docopt, for example, is superb, and Fire's no-assembly-required
 philosophy is quite fun in its own right.  
 I also, in full disclosure, don't too much enjoy the design of a lot of current argparse-like solutions (really, most
 of them except docopt). As such, in addition to aiding in the creation of such interdependent systems as mentioned
-above, ergo is also my shot at creating a more-intuitive interface for this sort of stuff.
-Time will have to tell whether it succeeds!
+above, ergo also aims to be as intuitive to the developer as possible. Time will have to tell whether it succeeds!
 
 [](#separator-for-pypi)
 

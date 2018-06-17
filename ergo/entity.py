@@ -2,7 +2,7 @@ import inspect
 import sys
 from copy import deepcopy
 
-from .misc import multiton, typecast
+from ergo.misc import multiton, typecast
 
 
 VAR_POS = inspect.Parameter.VAR_POSITIONAL
@@ -13,20 +13,20 @@ class Entity:
     def __init__(self, func, *, name=None, namespace=None, help=None):
         params = inspect.signature(func).parameters
         has_nsp = bool(namespace)
+        first_optional = next((i for i, v in enumerate(params.values()) if v.default is not inspect._empty), sys.maxsize)
         self._namespace = namespace
         self.params = list(params)[has_nsp:]
         self.argcount = sys.maxsize if any(i.kind == VAR_POS for i in params.values()) else len(params) - has_nsp
-        _first_optional = next((i for i, v in enumerate(params.values()) if v.default is not inspect._empty), sys.maxsize)
-        self._normalized_params = [''] + [
-          ('({})'.format(v) if i >= _first_optional else v).upper()
+        self._normalized_params = [
+          ('({})'.format(v) if i >= first_optional else v).upper()
           for i, v in enumerate(self.params[:-1])
           ]
         if self.params:
             s = self.params[-1]
             if self.argcount == sys.maxsize:
-                self._normalized_params.append('*{}'.format(s).upper())
+                self._normalized_params.append('{}...'.format(s).upper())
             else:
-                self._normalized_params.append(('({})'.format(s) if len(params) >= _first_optional else s).upper())
+                self._normalized_params.append(('({})'.format(s) if len(params) >= first_optional else s).upper())
         self.func, self.callback = func, typecast(func)
         self.help = inspect.cleandoc(func.__doc__ or '' if help is None else help)
         self.brief = next(iter(self.help.split('\n')), '')
@@ -56,7 +56,7 @@ class Flag(Entity.cls):
     
     @property
     def args(self):
-        return ' '.join(self._normalized_params) if self.params else ''
+        return ' ' + ' '.join(self._normalized_params) if self.params else ''
     
     def __str__(self):
         if self.short is None:
@@ -69,7 +69,7 @@ class Arg(Entity.cls):
     def __init__(self, cb, repeat_count, **kwargs):
         super().__init__(cb, **kwargs)
         self.name = self.identifier
-        self.repcount = '...' if repeat_count is Ellipsis else repeat_count
+        self.repcount = repeat_count
     
     def __str__(self):
-        return '{}({})'.format(self.identifier, self.repcount)
+        return '{}({})'.format(self.identifier, '...' if self.repcount is Ellipsis else self.repcount)

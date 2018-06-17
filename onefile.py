@@ -1,18 +1,307 @@
-"""
-argparse sucks
-this sucks too but less
-"""
-import os
+"""ergo as a single file"""
 import sys
+import os
 import shlex
-from functools import partial
+import inspect
+from ast import literal_eval
+from functools import wraps, partial
 from itertools import chain, zip_longest
+from types import SimpleNamespace
+from copy import deepcopy
 from keyword import iskeyword
 
-from ergo import errors
-from ergo.clumps import And, Or, Xor, ClumpGroup
-from ergo.entity import Entity, Arg, Flag
-from ergo.misc import ErgoNamespace, _Null
+
+__all__ = 'Parser', 'auto', 'booly', 'errors'
+
+_Null = type(
+  '_NullType', (),
+  {
+    '__bool__': lambda self: False,
+    '__repr__': lambda self: '<_Null>',
+  }
+  )()
+
+
+def typecast(func):
+    params = inspect.signature(func).parameters.values()
+    defaults = [p.default for p in params]
+    num_expected = sum(d is inspect._empty for d in defaults)
+    
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not params:
+            return func(*args, **kwargs)
+        # Prepare list/dict of all positional/keyword args with annotation or None
+        pos_annot, kw_annot = (
+          [func.__annotations__[p.name] for p in params if p.kind < 3 and p.name in func.__annotations__],
+          {p.name if p.kind == 3 else None: func.__annotations__.get(p.name) for p in params if p.kind >= 3}
+          )
+        # Assign default to handle **kwargs annotation if not given/callable
+        if not callable(kw_annot.get(None)):
+            kw_annot[None] = lambda x: x
+        if len(args) < num_expected:  # TODO: do this for kwargs as well (although kwargs won't be an ergo thing)
+            func(*args)  # will raise Python's error
+            # raise TypeError("{}() expected at least {} argument/s, got {}".format(func.__name__, num_expected, len(args)))
+        if len(args) < len(pos_annot):
+            pos_annot = [i < len(args) and v for i, v in enumerate(pos_annot)]
+            args = (*args, *defaults[len(args):])
+        # zip_longest to account for any var_positional argument
+        fill = zip_longest(pos_annot, args, fillvalue=pos_annot[-1] if pos_annot else None)
+        return func(
+          *(hint(val) if callable(hint) else val for hint, val in fill),
+          **{a: kw_annot[a](b) if a in kw_annot and callable(kw_annot[a]) else kw_annot[None](b) for a, b in kwargs.items()}
+          )
+    return wrapper
+
+
+def booly(arg):
+    comp = arg.lower()
+    if comp in ('yes', 'y', 'true', 't', '1'):
+        return True
+    elif comp in ('no', 'n', 'false', 'f', '0'):
+        return False
+    else:
+        raise ValueError('Could not convert {!r} to boolean'.format(arg))
+
+
+class auto:
+    def __new__(cls, obj, *rest):
+        if isinstance(obj, str) and not rest:
+            return cls._leval(obj)
+        return super().__new__(cls)
+    
+    def __init__(self, *types):
+        self.types = types
+        self.negated = False
+        
+        if not all(isinstance(i, type) for i in self.types):
+            raise TypeError("auto() argument '{}' is not a type".format(
+              next(i for i in self.types if not isinstance(i, type))
+            ))
+    
+    def __invert__(self):
+        self.negated ^= True
+        return self
+    
+    def __call__(self, obj):
+        ret = self._leval(obj)
+        if self.negated:
+            if isinstance(ret, self.types):
+                raise TypeError('Did not expect {}-type {!r}'.format(
+                  type(ret).__name__,
+                  ret
+                ))
+        elif not isinstance(ret, self.types):
+            raise TypeError('Expected {}, got {} {!r}'.format(
+              '/'.join(i.__name__ for i in self.types),
+              type(ret).__name__,
+              ret
+            ))
+        return ret
+    
+    @staticmethod
+    def _leval(obj):
+        try:
+            return literal_eval(obj)
+        except (SyntaxError, ValueError):
+            return obj
+
+
+class multiton:
+    classes = {}
+    
+    def __init__(self, pos=None, *, kw, cls=None):
+        self.class_ = cls
+        self.kw = kw
+        self.pos = pos
+    
+    def __call__(self, deco_cls):
+        cls = self.class_ or deco_cls
+        if cls not in self.classes:
+            self.classes[cls] = {}
+        instances = self.classes[cls]
+        
+        @wraps(deco_cls)
+        def getinstance(*args, **kwargs):
+            key = (args[:self.pos], kwargs) if self.kw else args[:self.pos]
+            if key not in instances:
+                instances[key] = deco_cls(*args, **kwargs)
+            return instances[key]
+        getinstance.cls = deco_cls
+        return getinstance
+
+
+class ErgoNamespace(SimpleNamespace):
+    def __bool__(self):
+        return bool(vars(self))
+    
+    def __contains__(self, name):
+        return hasattr(self, name)
+    
+    def __eq__(self, other):
+        return vars(self) == other
+    
+    def __getitem__(self, name):
+        return self.__getattribute__(name)
+    
+    def __iter__(self):
+        yield from vars(self)
+    
+    @property
+    def _(self):
+        return SimpleNamespace(
+          items=vars(self).items,
+          keys=vars(self).keys,
+          values=vars(self).values,
+          pretty=(lambda self, sep='\n', delim=': ':
+            sep.join(
+              '{}{}{}'.format(k, delim, v)
+              for k, v in self._.items()
+            )).__get__(self)
+          )
+
+class ClumpGroup(set):
+    def successes(self, parsed):
+        return {name for c in self if c.verify(parsed) for name in c.member_names}
+    
+    def failures(self, parsed):
+        return ((c.member_names, c.to_eliminate(parsed)) for c in self if not c.verify(parsed))
+
+
+class _Clump:
+    def __init__(self, key, host):
+        self.key = key
+        self.host = host
+        self.members = set()
+    
+    @property
+    def member_names(self):
+        return frozenset(i.name for i in self.members)
+    
+    def add(self, item):
+        self.members.add(item)
+
+
+@multiton(kw=False)
+class And(_Clump):
+    def verify(self, parsed):
+        # this should contain either no members or all members (latter indicating none were given)
+        r = self.member_names.difference(parsed)
+        return not r or parsed == r
+    
+    def to_eliminate(self, parsed):  # received
+        return frozenset(self.member_names.intersection(parsed))
+
+
+@multiton(kw=False)
+class Or(_Clump):
+    def verify(self, parsed):
+        # this should contain at least 1 member
+        return bool(self.member_names.intersection(parsed))
+    
+    def to_eliminate(self, parsed):  # received
+        return frozenset(self.member_names.intersection(parsed))
+
+
+@multiton(kw=False)
+class Xor(_Clump):
+    def verify(self, parsed):
+        # this should contain exactly 1 member
+        return 1 == len(self.member_names.intersection(parsed))
+    
+    def to_eliminate(self, parsed):  # not received
+        return frozenset(self.member_names.difference(parsed))
+
+
+VAR_POS = inspect.Parameter.VAR_POSITIONAL
+
+
+@multiton(kw=False)
+class Entity:
+    def __init__(self, func, *, name=None, namespace=None, help=None):
+        params = inspect.signature(func).parameters
+        has_nsp = bool(namespace)
+        first_optional = next((i for i, v in enumerate(params.values()) if v.default is not inspect._empty), sys.maxsize)
+        self._namespace = namespace
+        self.params = list(params)[has_nsp:]
+        self.argcount = sys.maxsize if any(i.kind == VAR_POS for i in params.values()) else len(params) - has_nsp
+        self._normalized_params = [
+          ('({})'.format(v) if i >= first_optional else v).upper()
+          for i, v in enumerate(self.params[:-1])
+          ]
+        if self.params:
+            s = self.params[-1]
+            if self.argcount == sys.maxsize:
+                self._normalized_params.append('{}...'.format(s).upper())
+            else:
+                self._normalized_params.append(('({})'.format(s) if len(params) >= first_optional else s).upper())
+        self.func, self.callback = func, typecast(func)
+        self.help = inspect.cleandoc(func.__doc__ or '' if help is None else help)
+        self.brief = next(iter(self.help.split('\n')), '')
+        self.identifier = name or func.__name__
+        self.name = self.identifier
+    
+    @property
+    def namespace(self):
+        return deepcopy(self._namespace)
+    
+    @property
+    def man(self):
+        return '{}\n\n{}'.format(
+          self, self.help
+          )
+    
+    def __call__(self, *args, **kwargs):
+        return self.callback(*args, **kwargs)
+
+
+@multiton(cls=Entity.cls, kw=False)
+class Flag(Entity.cls):
+    def __init__(self, *args, _='-', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.name = self.identifier.replace('_', _)
+        self.short = None
+    
+    @property
+    def args(self):
+        return ' ' + ' '.join(self._normalized_params) if self.params else ''
+    
+    def __str__(self):
+        if self.short is None:
+            return '[--{}{}]'.format(self.name, self.args)
+        return '[-{} | --{}{}]'.format(self.short, self.name, self.args)
+
+
+@multiton(cls=Entity.cls, kw=False)
+class Arg(Entity.cls):
+    def __init__(self, cb, repeat_count, **kwargs):
+        super().__init__(cb, **kwargs)
+        self.name = self.identifier
+        self.repcount = repeat_count
+    
+    def __str__(self):
+        return '{}({})'.format(self.identifier, '...' if self.repcount is Ellipsis else self.repcount)
+
+class ErgoException(Exception):
+    def __init__(self, msg, **kwargs):
+        self.details = ErgoNamespace(**kwargs)
+        super().__init__(msg)
+
+
+class ANDError(ErgoException):
+    pass
+
+
+class ORError(ErgoException):
+    pass
+
+
+class XORError(ErgoException):
+    pass
+
+
+class RequirementError(ErgoException):
+    pass
 
 
 _FILE = os.path.basename(sys.argv[0])
@@ -219,7 +508,7 @@ class _Handler:
             # or if it's in a satisfied XOR clump (i.e. exactly one other XOR in its clump was given)
             not_exempt = (all_failed - received) - elim['OR'] - elim['XOR']
             if not_exempt:
-                raise errors.ANDError(
+                raise ANDError(
                   'Expected all of the following flags/arguments: {}\n(Got {})'.format(
                       ', '.join(extract_names(all_failed)),
                       ', '.join(extract_names(received)) or 'none'
@@ -233,7 +522,7 @@ class _Handler:
             # an OR failure is okay if it's in a satisfied XOR clump (i.e. exactly one other XOR in its clump was given)
             not_exempt = (all_failed - received) - elim['XOR']
             if not_exempt:
-                raise errors.ORError(
+                raise ORError(
                   'Expected at least one of the following flags/arguments: {}\n(Got none)'.format(
                       ', '.join(extract_names(all_failed))
                     ),
@@ -246,7 +535,7 @@ class _Handler:
             # an XOR failure is okay if it satisfies an AND clump (i.e. all other ANDs in its clump were given)
             not_exempt = (all_failed - not_received) - elim['AND'] - self._required
             if len(not_exempt) > 1:
-                raise errors.XORError(
+                raise XORError(
                   'Expected no more than one of the following flags/arguments: {}\n(Got {})'.format(
                       ', '.join(extract_names(all_failed)),
                       ', '.join(extract_names(all_failed-not_received))
@@ -478,7 +767,7 @@ class ParserBase(_Handler, HelperMixin):
         nsp = ErgoNamespace(**final)
         
         if self._required.difference(nsp):
-            raise errors.RequirementError('Expected the following required arguments: {}\nGot {}'.format(
+            raise RequirementError('Expected the following required arguments: {}\nGot {}'.format(
               ", ".join(map(repr, self._required)),
               ", ".join(map(repr, self._required.intersection(nsp))) or 'none'
               )
@@ -578,3 +867,6 @@ class Parser(ParserBase):
     
     def __str__(self):
         return ''
+
+
+errors = SimpleNamespace(ANDError=ANDError, ORError=ORError, XORError=XORError, RequirementError=RequirementError)
