@@ -48,10 +48,10 @@ def test_auto(parse):
     a, b = parse('-A nothing-valid').auto2
     assert isinstance(a, str) and a == 'nothing-valid'
     assert b is None  # tests whether default arguments work
-    
     with pytest.raises(TypeError):
         parse('-A next-arg-will-error 100')
-    assert parse(r'-A 1 [\"test\"]').auto2[1] == ['test']
+        print(parser.flags['auto2']('next-arg-will-error', '100'))
+    assert parse('-A 1 [\\"test\\"]').auto2[1] == ['test']
     
     assert parse('-A 1').auto2[0] == 1
     assert parse('-A [1,2,3]').auto2[0] == [1, 2, 3]
@@ -64,7 +64,7 @@ def test_auto(parse):
 
 
 def test_booly(parse):
-    assert all(parser.parse('-b ' + b).boolish is True for b in ('yes', 'y', 'true', 't', '1'))
-    assert all(parser.parse('-b ' + b).boolish is False for b in ('no', 'n', 'false', 'f', '0'))
+    assert all(parse('-b ' + b).boolish is True for b in ('yes', 'y', 'true', 't', '1'))
+    assert all(parse('-b ' + b).boolish is False for b in ('no', 'n', 'false', 'f', '0'))
     with pytest.raises(ValueError):
-        parser.parse('-b not_a_booleanlike_string')
+        parse('-b not_a_booleanlike_string')

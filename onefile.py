@@ -1,10 +1,10 @@
 """ergo as a single file"""
 import sys
-import os
 import shlex
 import inspect
+import os
 from ast import literal_eval
-from functools import wraps, partial
+from functools import partial, wraps
 from itertools import chain, zip_longest
 from types import SimpleNamespace
 from copy import deepcopy

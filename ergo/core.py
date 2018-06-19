@@ -282,7 +282,7 @@ class _Handler:
             return entity
         return inner
     
-    def flag(self, dest=None, short=_Null, *, default=_Null, required=False, namespace=None, help=None, _='-'):
+    def flag(self, dest=None, short=_Null, *, aliases=(), default=_Null, required=False, namespace=None, help=None, _='-'):
         def inner(cb):
             entity = Flag(cb, namespace=namespace, name=dest, help=help, _=_)
             if dest is not None:
@@ -295,9 +295,11 @@ class _Handler:
                 else:
                     self._aliases[entity.short] = entity.name
             if default is not _Null:
-                self._defaults[entity.name] = default
+                self._defaults[entity.identifier] = default
             if required:
                 self._required.add(entity.name)
+            for alias in aliases:
+                self._aliases[alias] = entity.name
             self.flags[entity.name] = entity
             return entity
         return inner
@@ -441,12 +443,6 @@ class ParserBase(_Handler, HelperMixin):
                     flags.append((self.dealias(name), inp[idx:skip+idx]))
                 elif strict:
                     raise TypeError("Unknown flag `{}{}'".format(value[0], name))
-        
-        if strict and len(args) < sum(e not in self._defaults for e in self.arg_map.values()):
-            raise TypeError('Too few positional arguments (expected {}, got {})'.format(
-              sum(e not in self._defaults for e in self.arg_map.values()),
-              len(args)
-              ))
         return flags, args, command
     
     def do_parse(self, inp=None, strict=False):
@@ -553,7 +549,7 @@ class Group(SubHandler):
                 else:
                     self._aliases[entity.short] = entity.name
             if kwargs.get('default', _Null) is not _Null:  # could be `in` but we don't want them using _Null
-                self._defaults[entity.name] = kwargs['default']
+                self._defaults[entity.identifier] = kwargs['default']
             if kwargs.get('required'):
                 self._required.add(entity.name)
             self.flags[entity.name] = entity

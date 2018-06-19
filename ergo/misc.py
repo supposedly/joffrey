@@ -18,23 +18,25 @@ def typecast(func):
     params = inspect.signature(func).parameters.values()
     defaults = [p.default for p in params]
     num_expected = sum(d is inspect._empty for d in defaults)
+    # Prepare list/dict of all positional/keyword args with annotation or None
+    pos_annot_, kw_annot = (
+      [func.__annotations__.get(p.name) for p in params if p.kind < 3],
+      {p.name if p.kind == 3 else None: func.__annotations__.get(p.name) for p in params if p.kind >= 3}
+      )
+    # Assign default to handle **kwargs annotation if not given/callable
+    if not callable(kw_annot.get(None)):
+        kw_annot[None] = lambda x: x
     
     @wraps(func)
     def wrapper(*args, **kwargs):
+        pos_annot = pos_annot_
         if not params:
             return func(*args, **kwargs)
-        # Prepare list/dict of all positional/keyword args with annotation or None
-        pos_annot, kw_annot = (
-          [func.__annotations__[p.name] for p in params if p.kind < 3 and p.name in func.__annotations__],
-          {p.name if p.kind == 3 else None: func.__annotations__.get(p.name) for p in params if p.kind >= 3}
-          )
-        # Assign default to handle **kwargs annotation if not given/callable
-        if not callable(kw_annot.get(None)):
-            kw_annot[None] = lambda x: x
         if len(args) < num_expected:  # TODO: do this for kwargs as well (although kwargs won't be an ergo thing)
             func(*args)  # will raise Python's error
             # raise TypeError("{}() expected at least {} argument/s, got {}".format(func.__name__, num_expected, len(args)))
         if len(args) < len(pos_annot):
+            # typecasting should not apply to default arguments
             pos_annot = [i < len(args) and v for i, v in enumerate(pos_annot)]
             args = (*args, *defaults[len(args):])
         # zip_longest to account for any var_positional argument

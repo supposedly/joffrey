@@ -28,15 +28,12 @@ def test_counts():
 
 
 def test_strict():
-    with pytest.raises(TypeError) as arg_exc:
-        parser.parse('one', strict=True)  # Too few args
     with pytest.raises(TypeError) as flag_exc_short:
         parser.parse('-x', strict=True)  # Unknown flag
     with pytest.raises(TypeError) as flag_exc_long:
         parser.parse('--ecks', strict=True)  # Unknown flag
     with pytest.raises(TypeError) as flag_exc_equals:
         parser.parse('-a=aaa', strict=True)  # Unknown flag
-    assert str(arg_exc.value).startswith('Too few positional')
     assert str(flag_exc_short.value).startswith('Unknown flag')
     assert str(flag_exc_long.value).startswith('Unknown flag')
     assert str(flag_exc_equals.value).startswith('Unknown flag')
