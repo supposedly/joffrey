@@ -332,14 +332,13 @@ class ParserBase(_Handler, HelperMixin):
         if not isinstance(value, Group):
             return object.__setattr__(self, name, value)
         
-        required, (AND, OR, XOR) = value.required, value.clump
         if name in vars(self):
             raise ValueError('Group name already in use for this parser: ' + name)
         group = _Group(self, name)
-        if required:
+        if value.required:
             self._required.add(group.name)
-        self._clump(group, AND, OR, XOR)
         self._groups.add(group)
+        self._clump(group, value.AND, value.OR, value.XOR)
         object.__setattr__(self, name, group)
     
     def dealias(self, name):
@@ -560,7 +559,9 @@ class _Group(SubHandler):
 class Group:
     def __init__(self, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
         self.required = required
-        self.clump = AND, OR, XOR
+        self.AND = AND
+        self.OR = OR
+        self.XOR = XOR
 
 
 class Subparser(SubHandler, ParserBase):

@@ -1,17 +1,16 @@
 """ergo as a single file"""
-import sys
-import shlex
 import inspect
 import os
+import sys
+import shlex
 from ast import literal_eval
 from functools import partial, wraps
 from itertools import chain, zip_longest
 from types import SimpleNamespace
 from copy import deepcopy
-from keyword import iskeyword
 
 
-__all__ = 'Parser', 'auto', 'booly', 'errors'
+__all__ = 'CLI', 'auto', 'booly', 'errors'
 
 _Null = type(
   '_NullType', (),
@@ -26,23 +25,25 @@ def typecast(func):
     params = inspect.signature(func).parameters.values()
     defaults = [p.default for p in params]
     num_expected = sum(d is inspect._empty for d in defaults)
+    # Prepare list/dict of all positional/keyword args with annotation or None
+    pos_annot_, kw_annot = (
+      [func.__annotations__.get(p.name) for p in params if p.kind < 3],
+      {p.name if p.kind == 3 else None: func.__annotations__.get(p.name) for p in params if p.kind >= 3}
+      )
+    # Assign default to handle **kwargs annotation if not given/callable
+    if not callable(kw_annot.get(None)):
+        kw_annot[None] = lambda x: x
     
     @wraps(func)
     def wrapper(*args, **kwargs):
+        pos_annot = pos_annot_
         if not params:
             return func(*args, **kwargs)
-        # Prepare list/dict of all positional/keyword args with annotation or None
-        pos_annot, kw_annot = (
-          [func.__annotations__[p.name] for p in params if p.kind < 3 and p.name in func.__annotations__],
-          {p.name if p.kind == 3 else None: func.__annotations__.get(p.name) for p in params if p.kind >= 3}
-          )
-        # Assign default to handle **kwargs annotation if not given/callable
-        if not callable(kw_annot.get(None)):
-            kw_annot[None] = lambda x: x
         if len(args) < num_expected:  # TODO: do this for kwargs as well (although kwargs won't be an ergo thing)
             func(*args)  # will raise Python's error
             # raise TypeError("{}() expected at least {} argument/s, got {}".format(func.__name__, num_expected, len(args)))
         if len(args) < len(pos_annot):
+            # typecasting should not apply to default arguments
             pos_annot = [i < len(args) and v for i, v in enumerate(pos_annot)]
             args = (*args, *defaults[len(args):])
         # zip_longest to account for any var_positional argument
@@ -571,7 +572,7 @@ class _Handler:
             return entity
         return inner
     
-    def flag(self, dest=None, short=_Null, *, default=_Null, required=False, namespace=None, help=None, _='-'):
+    def flag(self, dest=None, short=_Null, *, aliases=(), default=_Null, required=False, namespace=None, help=None, _='-'):
         def inner(cb):
             entity = Flag(cb, namespace=namespace, name=dest, help=help, _=_)
             if dest is not None:
@@ -584,9 +585,11 @@ class _Handler:
                 else:
                     self._aliases[entity.short] = entity.name
             if default is not _Null:
-                self._defaults[entity.name] = default
+                self._defaults[entity.identifier] = default
             if required:
                 self._required.add(entity.name)
+            for alias in aliases:
+                self._aliases[alias] = entity.name
             self.flags[entity.name] = entity
             return entity
         return inner
@@ -609,12 +612,25 @@ class ParserBase(_Handler, HelperMixin):
         self._groups = set()
         super().__init__()
         if not flag_prefix:
-            raise ValueError('Flag prefix cannot be empty')
+            raise ValueError('Parser flag prefix cannot be empty')
         if not no_help:
             self.flags['help'] = self.flag(
               'help',
               help="Prints help and exits\nIf given valid NAME, displays that entity's help"
               )(lambda name=None: self.help(name))
+    
+    def __setattr__(self, name, value):
+        if not isinstance(value, Group):
+            return object.__setattr__(self, name, value)
+        
+        if name in vars(self):
+            raise ValueError('Group name already in use for this parser: ' + name)
+        group = _Group(self, name)
+        if value.required:
+            self._required.add(group.name)
+        self._groups.add(group)
+        self._clump(group, value.AND, value.OR, value.XOR)
+        object.__setattr__(self, name, group)
     
     def dealias(self, name):
         try:
@@ -730,12 +746,6 @@ class ParserBase(_Handler, HelperMixin):
                     flags.append((self.dealias(name), inp[idx:skip+idx]))
                 elif strict:
                     raise TypeError("Unknown flag `{}{}'".format(value[0], name))
-        
-        if strict and len(args) < sum(e not in self._defaults for e in self.arg_map.values()):
-            raise TypeError('Too few positional arguments (expected {}, got {})'.format(
-              sum(e not in self._defaults for e in self.arg_map.values()),
-              len(args)
-              ))
         return flags, args, command
     
     def do_parse(self, inp=None, strict=False):
@@ -781,19 +791,6 @@ class ParserBase(_Handler, HelperMixin):
             if systemexit is None and self.systemexit or systemexit:
                 self.error(e)
             raise
-    
-    def group(self, name, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
-        if name in vars(self):
-            raise ValueError('Group name already in use for this parser: ' + name)
-        if iskeyword(name) or not name.isidentifier():
-            raise ValueError('Invalid group name: ' + name)
-        group = Group(self, name)
-        if required:
-            self._required.add(group.name)
-        self._clump(group, AND, OR, XOR)
-        setattr(self, name, group)
-        self._groups.add(group)
-        return group
 
 
 class SubHandler(_Handler):
@@ -815,7 +812,7 @@ class SubHandler(_Handler):
         return ClumpGroup(self._aliases.get(i, i) for i in chain(self._xor, self.parent.parent_xor))
 
 
-class Group(SubHandler):
+class _Group(SubHandler):
     def arg(self, n=1, **kwargs):
         """
         n: number of times this arg should be received consecutively; pass ... for infinite
@@ -842,12 +839,20 @@ class Group(SubHandler):
                 else:
                     self._aliases[entity.short] = entity.name
             if kwargs.get('default', _Null) is not _Null:  # could be `in` but we don't want them using _Null
-                self._defaults[entity.name] = kwargs['default']
+                self._defaults[entity.identifier] = kwargs['default']
             if kwargs.get('required'):
                 self._required.add(entity.name)
             self.flags[entity.name] = entity
             return self.parent.flag(dest, short, **kwargs)(entity.func)
         return inner
+
+
+class Group:
+    def __init__(self, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
+        self.required = required
+        self.AND = AND
+        self.OR = OR
+        self.XOR = XOR
 
 
 class Subparser(SubHandler, ParserBase):

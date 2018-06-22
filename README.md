@@ -30,6 +30,7 @@ pip install ergo
 from ergo import Parser, Group
 
 parser = Parser()
+# __setattr__ for Group objects is special-cased
 parser.sc = Group(XOR=0)  # 0 is just an identifier; it can be anything
 
 
