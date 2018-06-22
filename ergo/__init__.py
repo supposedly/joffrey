@@ -1,2 +1,2 @@
-from .core import Parser
+from .core import Parser, Group
 from .misc import auto, booly

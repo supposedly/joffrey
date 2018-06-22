@@ -7,7 +7,6 @@ import sys
 import shlex
 from functools import partial
 from itertools import chain, zip_longest
-from keyword import iskeyword
 
 from ergo import errors
 from ergo.clumps import And, Or, Xor, ClumpGroup
@@ -322,12 +321,26 @@ class ParserBase(_Handler, HelperMixin):
         self._groups = set()
         super().__init__()
         if not flag_prefix:
-            raise ValueError('Flag prefix cannot be empty')
+            raise ValueError('Parser flag prefix cannot be empty')
         if not no_help:
             self.flags['help'] = self.flag(
               'help',
               help="Prints help and exits\nIf given valid NAME, displays that entity's help"
               )(lambda name=None: self.help(name))
+    
+    def __setattr__(self, name, value):
+        if not isinstance(value, Group):
+            return object.__setattr__(self, name, value)
+        
+        required, (AND, OR, XOR) = value.required, value.clump
+        if name in vars(self):
+            raise ValueError('Group name already in use for this parser: ' + name)
+        group = _Group(self, name)
+        if required:
+            self._required.add(group.name)
+        self._clump(group, AND, OR, XOR)
+        self._groups.add(group)
+        object.__setattr__(self, name, group)
     
     def dealias(self, name):
         try:
@@ -488,19 +501,6 @@ class ParserBase(_Handler, HelperMixin):
             if systemexit is None and self.systemexit or systemexit:
                 self.error(e)
             raise
-    
-    def group(self, name, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
-        if name in vars(self):
-            raise ValueError('Group name already in use for this parser: ' + name)
-        if iskeyword(name) or not name.isidentifier():
-            raise ValueError('Invalid group name: ' + name)
-        group = Group(self, name)
-        if required:
-            self._required.add(group.name)
-        self._clump(group, AND, OR, XOR)
-        setattr(self, name, group)
-        self._groups.add(group)
-        return group
 
 
 class SubHandler(_Handler):
@@ -522,7 +522,7 @@ class SubHandler(_Handler):
         return ClumpGroup(self._aliases.get(i, i) for i in chain(self._xor, self.parent.parent_xor))
 
 
-class Group(SubHandler):
+class _Group(SubHandler):
     def arg(self, n=1, **kwargs):
         """
         n: number of times this arg should be received consecutively; pass ... for infinite
@@ -555,6 +555,12 @@ class Group(SubHandler):
             self.flags[entity.name] = entity
             return self.parent.flag(dest, short, **kwargs)(entity.func)
         return inner
+
+
+class Group:
+    def __init__(self, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
+        self.required = required
+        self.clump = AND, OR, XOR
 
 
 class Subparser(SubHandler, ParserBase):

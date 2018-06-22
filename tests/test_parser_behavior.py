@@ -1,6 +1,6 @@
 import pytest
 
-from ergo import Parser
+from ergo import Parser, Group
 
 
 @pytest.fixture
@@ -30,17 +30,13 @@ def test_change_underscore(parser):
 
 
 def test_bad_group_names(parser):
+    parser.name_conflict = Group()
     with pytest.raises(ValueError):
-        parser.group('def')
-    with pytest.raises(ValueError):
-        parser.group('not an identifier')
-    parser.group('name_conflict')
-    with pytest.raises(ValueError):
-        parser.group('name_conflict')
+        parser.name_conflict = Group()
 
 
 def test_nonexistents(parser):
-    parser.group('for_codecov')  # causes the `for g in self._groups` loops to run
+    parser.for_codecov = Group()  # causes the `for g in self._groups` loops to run
     for x in ('remove', 'getarg', 'getflag', 'getcmd'):
         with pytest.raises(KeyError):
             getattr(parser, x)('this does not exist')

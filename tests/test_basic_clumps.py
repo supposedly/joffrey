@@ -1,8 +1,8 @@
 import pytest
-from ergo import Parser, errors
+from ergo import Parser, Group, errors
 
 parser = Parser(systemexit=False)
-parser.group('sc', XOR=0)
+parser.sc = Group(XOR=0)
 
 
 @parser.arg()
