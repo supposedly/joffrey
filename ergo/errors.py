@@ -1,4 +1,4 @@
-from ergo.misc import ErgoNamespace
+from .misc import ErgoNamespace
 
 
 class ErgoException(Exception):

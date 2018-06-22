@@ -2,7 +2,7 @@ import inspect
 import sys
 from copy import deepcopy
 
-from ergo.misc import multiton, typecast
+from .misc import multiton, typecast
 
 
 VAR_POS = inspect.Parameter.VAR_POSITIONAL

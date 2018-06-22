@@ -1,6 +1,6 @@
 """ergo as a single file"""
-import sys
 import shlex
+import sys
 import inspect
 import os
 from ast import literal_eval
@@ -26,23 +26,25 @@ def typecast(func):
     params = inspect.signature(func).parameters.values()
     defaults = [p.default for p in params]
     num_expected = sum(d is inspect._empty for d in defaults)
+    # Prepare list/dict of all positional/keyword args with annotation or None
+    pos_annot_, kw_annot = (
+      [func.__annotations__.get(p.name) for p in params if p.kind < 3],
+      {p.name if p.kind == 3 else None: func.__annotations__.get(p.name) for p in params if p.kind >= 3}
+      )
+    # Assign default to handle **kwargs annotation if not given/callable
+    if not callable(kw_annot.get(None)):
+        kw_annot[None] = lambda x: x
     
     @wraps(func)
     def wrapper(*args, **kwargs):
+        pos_annot = pos_annot_
         if not params:
             return func(*args, **kwargs)
-        # Prepare list/dict of all positional/keyword args with annotation or None
-        pos_annot, kw_annot = (
-          [func.__annotations__[p.name] for p in params if p.kind < 3 and p.name in func.__annotations__],
-          {p.name if p.kind == 3 else None: func.__annotations__.get(p.name) for p in params if p.kind >= 3}
-          )
-        # Assign default to handle **kwargs annotation if not given/callable
-        if not callable(kw_annot.get(None)):
-            kw_annot[None] = lambda x: x
         if len(args) < num_expected:  # TODO: do this for kwargs as well (although kwargs won't be an ergo thing)
             func(*args)  # will raise Python's error
             # raise TypeError("{}() expected at least {} argument/s, got {}".format(func.__name__, num_expected, len(args)))
         if len(args) < len(pos_annot):
+            # typecasting should not apply to default arguments
             pos_annot = [i < len(args) and v for i, v in enumerate(pos_annot)]
             args = (*args, *defaults[len(args):])
         # zip_longest to account for any var_positional argument
@@ -571,7 +573,7 @@ class _Handler:
             return entity
         return inner
     
-    def flag(self, dest=None, short=_Null, *, default=_Null, required=False, namespace=None, help=None, _='-'):
+    def flag(self, dest=None, short=_Null, *, aliases=(), default=_Null, required=False, namespace=None, help=None, _='-'):
         def inner(cb):
             entity = Flag(cb, namespace=namespace, name=dest, help=help, _=_)
             if dest is not None:
@@ -584,9 +586,11 @@ class _Handler:
                 else:
                     self._aliases[entity.short] = entity.name
             if default is not _Null:
-                self._defaults[entity.name] = default
+                self._defaults[entity.identifier] = default
             if required:
                 self._required.add(entity.name)
+            for alias in aliases:
+                self._aliases[alias] = entity.name
             self.flags[entity.name] = entity
             return entity
         return inner
@@ -730,12 +734,6 @@ class ParserBase(_Handler, HelperMixin):
                     flags.append((self.dealias(name), inp[idx:skip+idx]))
                 elif strict:
                     raise TypeError("Unknown flag `{}{}'".format(value[0], name))
-        
-        if strict and len(args) < sum(e not in self._defaults for e in self.arg_map.values()):
-            raise TypeError('Too few positional arguments (expected {}, got {})'.format(
-              sum(e not in self._defaults for e in self.arg_map.values()),
-              len(args)
-              ))
         return flags, args, command
     
     def do_parse(self, inp=None, strict=False):
@@ -842,7 +840,7 @@ class Group(SubHandler):
                 else:
                     self._aliases[entity.short] = entity.name
             if kwargs.get('default', _Null) is not _Null:  # could be `in` but we don't want them using _Null
-                self._defaults[entity.name] = kwargs['default']
+                self._defaults[entity.identifier] = kwargs['default']
             if kwargs.get('required'):
                 self._required.add(entity.name)
             self.flags[entity.name] = entity

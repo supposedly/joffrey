@@ -9,10 +9,10 @@ from functools import partial
 from itertools import chain, zip_longest
 from keyword import iskeyword
 
-from ergo import errors
-from ergo.clumps import And, Or, Xor, ClumpGroup
-from ergo.entity import Entity, Arg, Flag
-from ergo.misc import ErgoNamespace, _Null
+from . import errors
+from .clumps import And, Or, Xor, ClumpGroup
+from .entity import Entity, Arg, Flag
+from .misc import ErgoNamespace, _Null
 
 
 _FILE = os.path.basename(sys.argv[0])

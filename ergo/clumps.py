@@ -1,4 +1,4 @@
-from ergo.misc import multiton
+from .misc import multiton
 
 
 class ClumpGroup(set):

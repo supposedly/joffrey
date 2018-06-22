@@ -92,7 +92,7 @@ FLAGS
 	help            Prints help and exits
 	verbosity       This does nothing but it shows namespaces (which are always passed as the first arg)
 ```
-(The default `help` flag To get rid of the default `help` flag, pass `no_help=True` to `Parser()`)
+(To get rid of the default `help` flag, pass `no_help=True` to `Parser()`)
 
 The only things not decorator-based are "groups" and "commands". Commands (subparsers) are parsers that have a 'name' attribute,
 and groups -- demo'd above -- are applied their clump settings as a whole rather than applying them to each individual
@@ -114,19 +114,19 @@ I feel like the lib should be able to handle this stuff itself, without your nee
 that these two flags aren't used at the same time as this arg"* or *"make sure all these things appear
 together, or alternatively that this second thing does"* to external functions or post-parsing if-statements.
 
-(*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which does have the
+*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which does have the
 same concepts as ergo's AND/OR/XOR clumps (by the names of "requires", "wants", and "conflicts"), albeit with
-some unfortunate (within its context as a Python utility) design choices overall. I also at about the same
+some unfortunate design choices overall within its context as a Python utility. I also at about the same
 time found [argh](https://argh.readthedocs.io/en/latest/index.html), which despite still not solving
 the clumping issue appears to (by pure coincidence) share a number of features with ergo. Both projects are inactive
-and the latter even depends on argparse underneath, however, so ergo does look to be clear!)
+and the latter depends on argparse underneath, however, so ergo does look to be in the clear.
 
 Ergo, by the way, is still early in alpha. If it really doesn't solve the same problems for you that it does for me,
 I think you'd be better off trying something else; docopt, for example, is superb, and Fire's no-assembly-required
 philosophy is quite fun in its own right.  
 I also, in full disclosure, don't too much enjoy the design of a lot of current argparse-like solutions (really, most
 of them except docopt). As such, in addition to aiding in the creation of such interdependent systems as mentioned
-above, ergo also aims to be as intuitive to the developer as possible. Time will have to tell whether it succeeds!
+above, ergo's also my shot at just making something enjoyable to work with. Time will have to tell whether it succeeds!
 
 [](#separator-for-pypi)
 
