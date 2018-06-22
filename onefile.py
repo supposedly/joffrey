@@ -1,8 +1,8 @@
 """ergo as a single file"""
-import inspect
+import shlex
 import os
 import sys
-import shlex
+import inspect
 from ast import literal_eval
 from functools import partial, wraps
 from itertools import chain, zip_longest
@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from copy import deepcopy
 
 
-__all__ = 'CLI', 'auto', 'booly', 'errors'
+__all__ = 'Parser', 'auto', 'booly', 'errors'
 
 _Null = type(
   '_NullType', (),
@@ -612,7 +612,7 @@ class ParserBase(_Handler, HelperMixin):
         self._groups = set()
         super().__init__()
         if not flag_prefix:
-            raise ValueError('Parser flag prefix cannot be empty')
+            raise ValueError('Flag prefix cannot be empty')
         if not no_help:
             self.flags['help'] = self.flag(
               'help',

@@ -321,7 +321,7 @@ class ParserBase(_Handler, HelperMixin):
         self._groups = set()
         super().__init__()
         if not flag_prefix:
-            raise ValueError('Parser flag prefix cannot be empty')
+            raise ValueError('Flag prefix cannot be empty')
         if not no_help:
             self.flags['help'] = self.flag(
               'help',
