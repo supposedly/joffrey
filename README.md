@@ -27,10 +27,11 @@ pip install ergo
 ## Example
 
 ```py
-from ergo import Parser
+from ergo import Parser, Group
 
 parser = Parser()
-parser.group('sc', XOR=0)  # 0 is just an identifier; it can be anything
+# __setattr__ for Group objects is special-cased
+parser.sc = Group(XOR=0)  # 0 is just an identifier; it can be anything
 
 
 @parser.arg()
@@ -100,9 +101,6 @@ flag/arg within the group.
 
 ```py
 parser = Parser()
-# Will be accessible as `parser.something`, but also returns
-# the object if you'd like to assign it to something for convenience
-parser.group('something', XOR='whatever')
 # Also passes (*args, **kwargs) to Parser.__init__()
 cmd = parser.command('etc')  # first arg is name
 ```
@@ -196,17 +194,6 @@ Methods:
         part of a satisfied XOR clump (i.e. exactly one other member of its XOR clump appeared).
     - `XOR`: Clumps together entities of which *at most one* can appear. An XORed entity is allowed to appear alongside more than one
         other if it satisfies an AND clump (i.e. all other members of its AND clump appeared) or if it is `required`.
-- `group`:  
-    Creates a "group", which applies its clump settings to itself as a whole rather than to its members. Groups can also clump entities
-    within themselves.  
-    
-    `parser.group(name, *, required=False, AND=_Null, OR=_Null, XOR=_Null)`  
-    *See identical args of `flag` and `clump`.*
-    
-    []()
-    - `name` (`str`): This group's name; is added as an attribute to the parser, so `@parser.group('x', ...)` will result in the group being
-        accessible as `parser.x`. The `group()` method also returns the created group, however, so it can be assigned to its own variable name
-        if need be.
 - `command`:  
     Returns a sub-parser of this parser. When a command is detected in parsing input, parsing of its parent's options is abandoned and everything
     to the right is passed to the subparser instance.  
@@ -236,6 +223,17 @@ Methods:
     - `systemexit`: If set, overrides parser-level `systemexit` attribute. Has the same meaning, then, as `Parser.systemexit`.
     - `strict`: If `True`, parses in "strict mode": Unknown flags will cause an error rather than be ignored, and a bad amount
     of arguments (too few/too many) will do the same.
+- `__setattr__`:  
+    Parsers have `__setattr__` overridden to facilitate the creation of "groups", which apply their clump settings to themselves as a whole
+    rather than each of their members individually. Entities can also be clumped within groups.  
+    
+    `parser.group_name_here = Group(*, required=False, AND=_Null, OR=_Null, XOR=_Null)`  
+    *See identical args of `flag` and `clump`.*
+
+    If the R-value is not an `ergo.Group` instance, the setattr call will go through normally.
+
+    After the creation of a group, its methods such as `clump` (for internal clumping) can be accessed as `@parser.group_name_here.clump()`;
+    others are `arg`, `flag`, and `command`.
 
 
 ### Callbacks

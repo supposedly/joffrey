@@ -1,14 +1,13 @@
 """ergo as a single file"""
 import shlex
+import os
 import sys
 import inspect
-import os
 from ast import literal_eval
 from functools import partial, wraps
 from itertools import chain, zip_longest
 from types import SimpleNamespace
 from copy import deepcopy
-from keyword import iskeyword
 
 
 __all__ = 'Parser', 'auto', 'booly', 'errors'
@@ -620,6 +619,19 @@ class ParserBase(_Handler, HelperMixin):
               help="Prints help and exits\nIf given valid NAME, displays that entity's help"
               )(lambda name=None: self.help(name))
     
+    def __setattr__(self, name, value):
+        if not isinstance(value, Group):
+            return object.__setattr__(self, name, value)
+        
+        if name in vars(self):
+            raise ValueError('Group name already in use for this parser: ' + name)
+        group = _Group(self, name)
+        if value.required:
+            self._required.add(group.name)
+        self._groups.add(group)
+        self._clump(group, value.AND, value.OR, value.XOR)
+        object.__setattr__(self, name, group)
+    
     def dealias(self, name):
         try:
             return next(g.dealias(name) for g in self._groups if g.hasany(name))
@@ -779,19 +791,6 @@ class ParserBase(_Handler, HelperMixin):
             if systemexit is None and self.systemexit or systemexit:
                 self.error(e)
             raise
-    
-    def group(self, name, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
-        if name in vars(self):
-            raise ValueError('Group name already in use for this parser: ' + name)
-        if iskeyword(name) or not name.isidentifier():
-            raise ValueError('Invalid group name: ' + name)
-        group = Group(self, name)
-        if required:
-            self._required.add(group.name)
-        self._clump(group, AND, OR, XOR)
-        setattr(self, name, group)
-        self._groups.add(group)
-        return group
 
 
 class SubHandler(_Handler):
@@ -813,7 +812,7 @@ class SubHandler(_Handler):
         return ClumpGroup(self._aliases.get(i, i) for i in chain(self._xor, self.parent.parent_xor))
 
 
-class Group(SubHandler):
+class _Group(SubHandler):
     def arg(self, n=1, **kwargs):
         """
         n: number of times this arg should be received consecutively; pass ... for infinite
@@ -846,6 +845,14 @@ class Group(SubHandler):
             self.flags[entity.name] = entity
             return self.parent.flag(dest, short, **kwargs)(entity.func)
         return inner
+
+
+class Group:
+    def __init__(self, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
+        self.required = required
+        self.AND = AND
+        self.OR = OR
+        self.XOR = XOR
 
 
 class Subparser(SubHandler, ParserBase):
