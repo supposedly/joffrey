@@ -104,7 +104,7 @@ class auto:
 class multiton:
     classes = {}
     
-    def __init__(self, pos=None, *, kw, cls=None):
+    def __init__(self, pos=None, *, kw=False, cls=None):
         self.class_ = cls
         self.kw = kw
         self.pos = pos

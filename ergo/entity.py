@@ -8,7 +8,7 @@ from .misc import multiton, typecast
 VAR_POS = inspect.Parameter.VAR_POSITIONAL
 
 
-@multiton(kw=False)
+@multiton()
 class Entity:
     def __init__(self, func, *, name=None, namespace=None, help=None):
         params = inspect.signature(func).parameters
@@ -22,11 +22,11 @@ class Entity:
           for i, v in enumerate(self.params[:-1])
           ]
         if self.params:
-            s = self.params[-1]
+            last = self.params[-1]
             if self.argcount == sys.maxsize:
-                self._normalized_params.append('{}...'.format(s).upper())
+                self._normalized_params.append('{}...'.format(last).upper())
             else:
-                self._normalized_params.append(('({})'.format(s) if len(params) >= first_optional else s).upper())
+                self._normalized_params.append(('({})'.format(last) if len(params) >= first_optional else last).upper())
         self.func, self.callback = func, typecast(func)
         self.help = inspect.cleandoc(func.__doc__ or '' if help is None else help)
         self.brief = next(iter(self.help.split('\n')), '')
@@ -37,17 +37,11 @@ class Entity:
     def namespace(self):
         return deepcopy(self._namespace)
     
-    @property
-    def man(self):
-        return '{}\n\n{}'.format(
-          self, self.help
-          )
-    
     def __call__(self, *args, **kwargs):
         return self.callback(*args, **kwargs)
 
 
-@multiton(cls=Entity.cls, kw=False)
+@multiton(cls=Entity.cls)
 class Flag(Entity.cls):
     def __init__(self, *args, _='-', **kwargs):
         super().__init__(*args, **kwargs)
@@ -64,7 +58,7 @@ class Flag(Entity.cls):
         return '[-{} | --{}{}]'.format(self.short, self.name, self.args)
 
 
-@multiton(cls=Entity.cls, kw=False)
+@multiton(cls=Entity.cls)
 class Arg(Entity.cls):
     def __init__(self, cb, repeat_count, **kwargs):
         super().__init__(cb, **kwargs)

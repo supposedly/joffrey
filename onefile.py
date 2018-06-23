@@ -1,7 +1,7 @@
 """ergo as a single file"""
-import shlex
-import os
 import sys
+import os
+import shlex
 import inspect
 from ast import literal_eval
 from functools import partial, wraps
@@ -111,7 +111,7 @@ class auto:
 class multiton:
     classes = {}
     
-    def __init__(self, pos=None, *, kw, cls=None):
+    def __init__(self, pos=None, *, kw=False, cls=None):
         self.class_ = cls
         self.kw = kw
         self.pos = pos
@@ -183,7 +183,7 @@ class _Clump:
         self.members.add(item)
 
 
-@multiton(kw=False)
+@multiton()
 class And(_Clump):
     def verify(self, parsed):
         # this should contain either no members or all members (latter indicating none were given)
@@ -194,7 +194,7 @@ class And(_Clump):
         return frozenset(self.member_names.intersection(parsed))
 
 
-@multiton(kw=False)
+@multiton()
 class Or(_Clump):
     def verify(self, parsed):
         # this should contain at least 1 member
@@ -204,7 +204,7 @@ class Or(_Clump):
         return frozenset(self.member_names.intersection(parsed))
 
 
-@multiton(kw=False)
+@multiton()
 class Xor(_Clump):
     def verify(self, parsed):
         # this should contain exactly 1 member
@@ -217,7 +217,7 @@ class Xor(_Clump):
 VAR_POS = inspect.Parameter.VAR_POSITIONAL
 
 
-@multiton(kw=False)
+@multiton()
 class Entity:
     def __init__(self, func, *, name=None, namespace=None, help=None):
         params = inspect.signature(func).parameters
@@ -231,11 +231,11 @@ class Entity:
           for i, v in enumerate(self.params[:-1])
           ]
         if self.params:
-            s = self.params[-1]
+            last = self.params[-1]
             if self.argcount == sys.maxsize:
-                self._normalized_params.append('{}...'.format(s).upper())
+                self._normalized_params.append('{}...'.format(last).upper())
             else:
-                self._normalized_params.append(('({})'.format(s) if len(params) >= first_optional else s).upper())
+                self._normalized_params.append(('({})'.format(last) if len(params) >= first_optional else last).upper())
         self.func, self.callback = func, typecast(func)
         self.help = inspect.cleandoc(func.__doc__ or '' if help is None else help)
         self.brief = next(iter(self.help.split('\n')), '')
@@ -246,17 +246,11 @@ class Entity:
     def namespace(self):
         return deepcopy(self._namespace)
     
-    @property
-    def man(self):
-        return '{}\n\n{}'.format(
-          self, self.help
-          )
-    
     def __call__(self, *args, **kwargs):
         return self.callback(*args, **kwargs)
 
 
-@multiton(cls=Entity.cls, kw=False)
+@multiton(cls=Entity.cls)
 class Flag(Entity.cls):
     def __init__(self, *args, _='-', **kwargs):
         super().__init__(*args, **kwargs)
@@ -273,7 +267,7 @@ class Flag(Entity.cls):
         return '[-{} | --{}{}]'.format(self.short, self.name, self.args)
 
 
-@multiton(cls=Entity.cls, kw=False)
+@multiton(cls=Entity.cls)
 class Arg(Entity.cls):
     def __init__(self, cb, repeat_count, **kwargs):
         super().__init__(cb, **kwargs)
@@ -366,12 +360,25 @@ class HelperMixin:
     def help(self, name=None):
         if name is None:
             self.error()
-        try:
-            print('', self.get(name).man, sep='\n', end='\n\n')
-        except AttributeError:
-            print('No helpable entity named {!r}'.format(name))
-        finally:
+        
+        entity = self.get(name)
+        if entity is None:
+            print('No helpable entity named', repr(name))
             raise SystemExit
+        
+        try:
+            short = getattr(entity, 'short', '')
+            aliases = ', '.join(map(repr, (k for k, v in self._aliases.items() if v == name and k != short)))
+        except AttributeError:
+            aliases = ''
+        
+        print('',
+          entity,
+          'Aliases: {}\n'.format(aliases) if aliases else '',
+          entity.help,
+          sep='\n', end='\n\n'
+          )
+        raise SystemExit
 
 
 class _Handler:
@@ -618,6 +625,7 @@ class ParserBase(_Handler, HelperMixin):
               'help',
               help="Prints help and exits\nIf given valid NAME, displays that entity's help"
               )(lambda name=None: self.help(name))
+            del self._aliases['<lambda>']
     
     def __setattr__(self, name, value):
         if not isinstance(value, Group):

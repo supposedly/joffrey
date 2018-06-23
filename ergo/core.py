@@ -75,12 +75,25 @@ class HelperMixin:
     def help(self, name=None):
         if name is None:
             self.error()
-        try:
-            print('', self.get(name).man, sep='\n', end='\n\n')
-        except AttributeError:
-            print('No helpable entity named {!r}'.format(name))
-        finally:
+        
+        entity = self.get(name)
+        if entity is None:
+            print('No helpable entity named', repr(name))
             raise SystemExit
+        
+        try:
+            short = getattr(entity, 'short', '')
+            aliases = ', '.join(map(repr, (k for k, v in self._aliases.items() if v == name and k != short)))
+        except AttributeError:
+            aliases = ''
+        
+        print('',
+          entity,
+          'Aliases: {}\n'.format(aliases) if aliases else '',
+          entity.help,
+          sep='\n', end='\n\n'
+          )
+        raise SystemExit
 
 
 class _Handler:
@@ -327,6 +340,7 @@ class ParserBase(_Handler, HelperMixin):
               'help',
               help="Prints help and exits\nIf given valid NAME, displays that entity's help"
               )(lambda name=None: self.help(name))
+            del self._aliases['<lambda>']
     
     def __setattr__(self, name, value):
         if not isinstance(value, Group):

@@ -23,7 +23,7 @@ class _Clump:
         self.members.add(item)
 
 
-@multiton(kw=False)
+@multiton()
 class And(_Clump):
     def verify(self, parsed):
         # this should contain either no members or all members (latter indicating none were given)
@@ -34,7 +34,7 @@ class And(_Clump):
         return frozenset(self.member_names.intersection(parsed))
 
 
-@multiton(kw=False)
+@multiton()
 class Or(_Clump):
     def verify(self, parsed):
         # this should contain at least 1 member
@@ -44,7 +44,7 @@ class Or(_Clump):
         return frozenset(self.member_names.intersection(parsed))
 
 
-@multiton(kw=False)
+@multiton()
 class Xor(_Clump):
     def verify(self, parsed):
         # this should contain exactly 1 member
