@@ -52,22 +52,23 @@ class HelperMixin:
           for label in ('args', 'flags')
         )
     
-    def format_help(self, usage=True, commands=True):
+    def format_help(self, usage=True, commands=True, help=True):
         built = []
         if usage:
             built.append('usage: {}'.format(self.usage_info))
         if commands and self.commands:
             built.append('subcommands: {}'.format(','.join(map(str, self.all_commands))))
-        if usage or commands:
+        if help and (usage or commands):
             built.append('')
-        built.append(self.help_info)
+        if help:
+            built.append(self.help_info)
         return '\n' + '\n'.join(built)
     
-    def print_help(self, usage=True, commands=True):
-        print(self.format_help(usage, commands), end='\n\n')
+    def print_help(self, usage=True, commands=True, help=True):
+        print(self.format_help(usage, commands, help), end='\n\n')
     
-    def error(self, exc=None):
-        self.print_help()
+    def error(self, exc=None, help=True):
+        self.print_help(commands=help, help=help)
         if exc is None:
             raise SystemExit
         raise SystemExit(exc if str(exc) else type(exc))
@@ -75,18 +76,15 @@ class HelperMixin:
     def help(self, name=None):
         if name is None:
             self.error()
-        
         entity = self.get(name)
         if entity is None:
             print('No helpable entity named', repr(name))
             raise SystemExit
-        
         try:
             short = getattr(entity, 'short', '')
             aliases = ', '.join(map(repr, (k for k, v in self._aliases.items() if v == name and k != short)))
         except AttributeError:
             aliases = ''
-        
         print('',
           entity,
           'Aliases: {}\n'.format(aliases) if aliases else '',
@@ -512,7 +510,7 @@ class ParserBase(_Handler, HelperMixin):
             return self.do_parse(inp, strict)
         except Exception as e:
             if systemexit is None and self.systemexit or systemexit:
-                self.error(e)
+                self.error(e, help=False)
             raise
 
 
