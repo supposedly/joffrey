@@ -216,12 +216,14 @@ class _Handler:
               for n in collection
               )
         
-        err_details = dict(
-          AND_SUC=elim['AND'], OR_SUC=elim['OR'], XOR_SUC=elim['XOR'],
-          parsed=parsed,
-          groups=groups,
-          handler=repr(self)
-          )
+        err_details = {
+          'AND_SUC': elim['AND'],
+          'OR_SUC': elim['OR'],
+          'XOR_SUC': elim['XOR'],
+          'parsed': parsed,
+          'groups': groups,
+          'handler': repr(self)
+          }
         
         for all_failed, received in self._and.failures(parsed):
             # AND failure == member of an AND clump that was not given
@@ -254,7 +256,11 @@ class _Handler:
         for all_failed, not_received in self._xor.failures(parsed):
             # XOR failure == member of an XOR clump that was given alongside at least one other
             # an XOR failure is okay if it satisfies an AND clump (i.e. all other ANDs in its clump were given)
-            not_exempt = (all_failed - not_received) - elim['AND'] - self._required
+            ####################################################################################
+            # XXX: SHOULD it be okay if it satisfies an OR clump? What about if it's required? #
+            # That is: should this actually say `- elim['AND'] - elim['OR'] - self._required`? #
+            ####################################################################################
+            not_exempt = (all_failed - not_received) - elim['AND']
             if len(not_exempt) > 1:
                 raise errors.XORError(
                   'Expected no more than one of the following flags/arguments: {}\n(Got {})'.format(
@@ -276,7 +282,7 @@ class _Handler:
     
     def arg(self, n=1, *, required=False, namespace=None, help=None):
         """
-        n: number of times this arg should be received consecutively; pass ... for infinite
+        n: number of times this arg should be received consecutively; ... for infinite
         Expected kwargs: _ (str), help (str)
         """
         def inner(cb):

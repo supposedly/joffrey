@@ -27,8 +27,8 @@ class _Clump:
 class And(_Clump):
     def verify(self, parsed):
         # this should contain either no members or all members (latter indicating none were given)
-        r = self.member_names.difference(parsed)
-        return not r or parsed == r
+        diff = self.member_names.difference(parsed)
+        return not diff or parsed == diff
     
     def to_eliminate(self, parsed):  # received
         return frozenset(self.member_names.intersection(parsed))
@@ -48,7 +48,7 @@ class Or(_Clump):
 class Xor(_Clump):
     def verify(self, parsed):
         # this should contain exactly 1 member
-        return 1 == len(self.member_names.intersection(parsed))
+        return len(self.member_names.intersection(parsed)) == 1
     
     def to_eliminate(self, parsed):  # not received
         return frozenset(self.member_names.difference(parsed))

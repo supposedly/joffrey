@@ -194,7 +194,7 @@ Methods:
     - `OR`: Clumps together entities of which *at least one* must appear. An ORed entity is excused from being invoked if it is
         part of a satisfied XOR clump (i.e. exactly one other member of its XOR clump appeared).
     - `XOR`: Clumps together entities of which *at most one* can appear. An XORed entity is allowed to appear alongside more than one
-        other if it satisfies an AND clump (i.e. all other members of its AND clump appeared) or if it is `required`.
+        other if it satisfies an AND clump (i.e. all other members of its AND clump appeared).
 - `command`:  
     Returns a sub-parser of this parser. When a command is detected in parsing input, parsing of its parent's options is abandoned and everything
     to the right is passed to the subparser instance.  
