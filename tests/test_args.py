@@ -1,46 +1,46 @@
 import pytest
 
-from ergo import Parser
+from ergo import CLI
 
-parser = Parser(systemexit=False)
+cli = CLI(systemexit=False)
 
 
-@parser.arg()  # n = 1
+@cli.arg()  # n = 1
 def first(value):
     return value
 
 
-@parser.arg(2, namespace={'accum': []})
+@cli.arg(2, namespace={'accum': []})
 def floats(nsp, value):
     nsp.accum.append(value)
     return nsp.accum
 
 
-@parser.arg(..., namespace={'count': 0})
+@cli.arg(..., namespace={'count': 0})
 def consumed(nsp, value):
     nsp.count += 1
     return nsp.count, value
 
 
 def test_counts():
-    n = parser.parse('one 2 3 c o n s u m e d')
+    n = cli.parse('one 2 3 c o n s u m e d')
     assert n == {'consumed': (8, 'd'), 'first': 'one', 'floats': ['2', '3']}
 
 
 def test_strict():
     with pytest.raises(TypeError) as flag_exc_short:
-        parser.parse('-x', strict=True)  # Unknown flag
+        cli.parse('-x', strict=True)  # Unknown flag
     with pytest.raises(TypeError) as flag_exc_long:
-        parser.parse('--ecks', strict=True)  # Unknown flag
+        cli.parse('--ecks', strict=True)  # Unknown flag
     with pytest.raises(TypeError) as flag_exc_equals:
-        parser.parse('-a=aaa', strict=True)  # Unknown flag
+        cli.parse('-a=aaa', strict=True)  # Unknown flag
     assert str(flag_exc_short.value).startswith('Unknown flag')
     assert str(flag_exc_long.value).startswith('Unknown flag')
     assert str(flag_exc_equals.value).startswith('Unknown flag')
 
 
 def test_too_many():
-    parser.remove(consumed)
+    cli.remove(consumed)
     with pytest.raises(TypeError) as arg_exc:
-        parser.parse('fine fine fine BAD', strict=True)  # Too many args
+        cli.parse('fine fine fine BAD', strict=True)  # Too many args
     assert str(arg_exc.value).startswith('Too many positional')

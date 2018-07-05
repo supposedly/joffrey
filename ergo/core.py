@@ -321,13 +321,13 @@ class _Handler:
         return inner
     
     def command(self, name, *args, AND=_Null, OR=_Null, XOR=_Null, aliases=(), _='-', **kwargs):
-        subparser = Subparser(*args, **kwargs, name=name, parent=self)
+        subcli = SubCommand(*args, **kwargs, name=name, parent=self)
         visual_name = name.replace('_', _)
         for alias in aliases:
             self._aliases[alias] = visual_name
-        self._clump(subparser, AND, OR, XOR)
-        self.commands[visual_name] = subparser
-        return subparser
+        self._clump(subcli, AND, OR, XOR)
+        self.commands[visual_name] = subcli
+        return subcli
 
 
 class ParserBase(_Handler, HelperMixin):
@@ -351,7 +351,7 @@ class ParserBase(_Handler, HelperMixin):
             return object.__setattr__(self, name, val)
         
         if name in vars(self):
-            raise ValueError('Group name already in use for this parser: ' + name)
+            raise ValueError('Group name already in use for this cli: ' + name)
         if val._required:
             self._required.add(name)
         
@@ -544,7 +544,7 @@ class SubHandler(_Handler):
 class Group(SubHandler):
     def __init__(self, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
         """
-        Parser later calls `SubHandler.__init__(Group(), self, name)` in its __setattr__()
+        CLI later calls `SubHandler.__init__(Group(), self, name)` in its __setattr__()
         (All instance attributes are overridden by this)
         """
         self._required = required
@@ -586,7 +586,7 @@ class Group(SubHandler):
         return inner
 
 
-class Subparser(SubHandler, ParserBase):
+class SubCommand(SubHandler, ParserBase):
     def __init__(self, flag_prefix='-', *, parent, name):
         SubHandler.__init__(self, parent, name)
         ParserBase.__init__(self, flag_prefix)
@@ -595,7 +595,7 @@ class Subparser(SubHandler, ParserBase):
         return ' {}'.format(self.name)
     
 
-class Parser(ParserBase):
+class CLI(ParserBase):
     def parse(self, inp=sys.argv[1:], **kwargs):
         if isinstance(inp, str):
             inp = shlex.split(inp)

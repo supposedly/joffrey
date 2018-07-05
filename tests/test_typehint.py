@@ -1,31 +1,31 @@
 import pytest
-from ergo import Parser, auto, booly
+from ergo import CLI, auto, booly
 
 
-parser = Parser(systemexit=False)
+cli = CLI(systemexit=False)
 
 
 @pytest.fixture
 def parse():
-    return parser.parse
+    return cli.parse
 
 
-@parser.flag()
+@cli.flag()
 def standard(one: int, two: list):
     return one, two
 
 
-@parser.flag()
+@cli.flag()
 def boolish(one: booly):
     return one
 
 
-@parser.flag()
+@cli.flag()
 def auto1(one: auto):
     return one
 
 
-@parser.flag(short='A')
+@cli.flag(short='A')
 def auto2(one: auto(int, list, str), two: ~auto(int) = None):
     return one, two
 
@@ -50,7 +50,7 @@ def test_auto(parse):
     assert b is None  # tests whether default arguments work
     with pytest.raises(TypeError):
         parse('-A next-arg-will-error 100')
-        print(parser.flags['auto2']('next-arg-will-error', '100'))
+        print(cli.flags['auto2']('next-arg-will-error', '100'))
     assert parse('-A 1 [\\"test\\"]').auto2[1] == ['test']
     
     assert parse('-A 1').auto2[0] == 1

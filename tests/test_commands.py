@@ -1,26 +1,26 @@
 import pytest
-from ergo import Parser, Group, errors
+from ergo import CLI, Group, errors
 
-parser = Parser(systemexit=False)
-parser.sc = Group(XOR=0)
-int_cmd = parser.command('int', XOR=0)
+cli = CLI(systemexit=False)
+cli.sc = Group(XOR=0)
+int_cmd = cli.command('int', XOR=0)
 
 
-@parser.arg()
+@cli.arg()
 def name(name):
     """Args, positional, are parsed in the order they're added in"""
     return name
 
 
-@parser.sc.clump(AND='blah')
-@parser.sc.flag(short='S')
+@cli.sc.clump(AND='blah')
+@cli.sc.flag(short='S')
 def scream(text):
     """I have no mouth and I must ... yeah"""
     return text.upper()
 
 
-@parser.sc.clump(AND='blah')
-@parser.sc.flag('verbosity', namespace={'count': 0})
+@cli.sc.clump(AND='blah')
+@cli.sc.flag('verbosity', namespace={'count': 0})
 def verbose(nsp):
     """This does nothing but it shows namespaces (which are always passed as the first arg)"""
     if nsp.count < 10:
@@ -35,21 +35,21 @@ def integer(num: int):
 
 
 def test_ok_1():
-    done = parser.parse('test')
+    done = cli.parse('test')
     assert done.name == 'test'
 
 
 def test_help():
-        parser.format_help()  # codecov...
+        cli.format_help()  # codecov...
         with pytest.raises(SystemExit):
-            parser.help()
+            cli.help()
         with pytest.raises(SystemExit):
-            parser.help('verbose')
+            cli.help('verbose')
 
 
 def test_subparser_consumes_everything():
-    first = parser.parse('test int 1')
-    second = parser.parse('int 1 test')
+    first = cli.parse('test int 1')
+    second = cli.parse('int 1 test')
     assert first.int == second.int
     # in pre-0.1.5 versions, these would AssertionError because `int` wouldn't consume `test`
     assert 'name' not in second
@@ -59,14 +59,14 @@ def test_subparser_consumes_everything():
 def test_subparser_xor_failure():
     for infix in ('-S nothin', '-v', '-S nothin -v'):
         with pytest.raises(errors.XORError):
-            parser.parse('test {} int 1'.format(infix))
+            cli.parse('test {} int 1'.format(infix))
 
 
 def test_arg_failure():
     with pytest.raises(TypeError):
-        parser.parse('test -S')
+        cli.parse('test -S')
 
 
 def test_conv_failure():
     with pytest.raises(ValueError):
-        parser.parse('test int what')
+        cli.parse('test int what')

@@ -1,4 +1,4 @@
-# Yet Another Command-Line-Argument Parser
+# Yet Another Command-Line-Argument CLI
 
 [![Build Status](https://travis-ci.com/eltrhn/ergo.svg?branch=master)](https://travis-ci.com/eltrhn/ergo)
 [![codecov](https://codecov.io/gh/eltrhn/ergo/branch/master/graph/badge.svg)](https://codecov.io/gh/eltrhn/ergo)
@@ -18,7 +18,7 @@ pip install ergo
 1. [Example](#example)
 2. [Why?](#why)
 3. [Documentation](#documentation)
-    1. [Parser](#parser)
+    1. [CLI](#cli)
     2. [Callbacks](#callbacks)
     3. [Typehinting goodies](#more-typehints)
 
@@ -27,54 +27,54 @@ pip install ergo
 ## Example
 
 ```py
-from ergo import Parser, Group
+from ergo import CLI, Group
 
-parser = Parser()
-# Parser.__setattr__() on Group objects is special-cased
-parser.sc = Group(XOR=0)  # 0 is just an identifier; it can be anything
+cli = CLI()
+# CLI.__setattr__() on Group objects is special-cased
+cli.sc = Group(XOR=0)  # 0 is just an identifier; it can be anything
 
 
-@parser.arg()
+@cli.arg()
 def name(name):
     """Args, positional, are parsed in the order they're added in"""
     return name
 
-@parser.sc.clump(AND='blah')
-@parser.sc.flag(short='S')
+@cli.sc.clump(AND='blah')
+@cli.sc.flag(short='S')
 def scream(text):
     """I have no mouth and I must ... yeah"""
     return text.upper()
 
-@parser.sc.clump(AND='blah')  # this flag and `scream` *must* appear together (same AND)
-@parser.sc.flag('verbosity', namespace={'count': 0})
+@cli.sc.clump(AND='blah')  # this flag and `scream` *must* appear together (same AND)
+@cli.sc.flag('verbosity', namespace={'count': 0})
 def verbose(nsp):
     """This does nothing but it shows namespaces (which are always passed as the first arg)"""
     if nsp.count < 3:
         nsp.count += 1
     return nsp.count
 
-@parser.clump(XOR=0)  # this flag *cannot* appear alongside any in group `sc` (same XOR)
-@parser.flag('addition')
+@cli.clump(XOR=0)  # this flag *cannot* appear alongside any in group `sc` (same XOR)
+@cli.flag('addition')
 def add(a: int = 4, *b: int):  # can also provide default args and a type-coercion hint if needed
     """Who needs a calculator"""
     return a + sum(b)
 ```
 ```py
->>> parser.parse('foo -S "test test" -vvvv')  # input will be shlex.split if given as a string (defaults to sys.argv though)
+>>> cli.parse('foo -S "test test" -vvvv')  # input will be shlex.split if given as a string (defaults to sys.argv though)
 ErgoNamespace(name='foo', scream='TEST TEST', verbosity=3)
 >>> 
->>> parser.parse('foo -v')
+>>> cli.parse('foo -v')
 # <help/usage info...>
 Expected all of the following flags/arguments: 'scream', 'verbosity'
 (Got 'verbosity')
 >>> 
->>> parser.parse('foo --add 1 6')
+>>> cli.parse('foo --add 1 6')
 ErgoNamespace(addition=7, name='foo')
 >>> 
->>> parser.parse('foo -a')  # same as `foo --add`; default short alias is first letter of name (`short=None` removes entirely)
+>>> cli.parse('foo -a')  # same as `foo --add`; default short alias is first letter of name (`short=None` removes entirely)
 ErgoNamespace(addition=4, name='foo')
 >>> 
->>> parser.parse('foo -a 1 2 -S "this is gonna error" -v')
+>>> cli.parse('foo -a 1 2 -S "this is gonna error" -v')
 # <help/usage info...>
 Expected no more than one of the following flags/arguments: 'addition', ['scream', 'verbosity']
 (Got 'addition', ['scream', 'verbosity'])
@@ -93,16 +93,16 @@ FLAGS
 	help            Prints help and exits
 	verbosity       This does nothing but it shows namespaces (which are always passed as the first arg)
 ```
-(To get rid of the default `help` flag, pass `no_help=True` to `Parser()`)
+(To get rid of the default `help` flag, pass `no_help=True` to `CLI()`)
 
-The only things not decorator-based are "groups" and "commands". Commands (subparsers) are parsers that have a 'name' attribute,
+The only things not decorator-based are "groups" and "commands". Commands (subparsers) are CLIs that have a 'name' attribute,
 and groups -- demo'd above -- are applied their clump settings as a whole rather than applying them to each individual
 flag/arg within the group.
 
 ```py
-parser = Parser()
-# Also passes (*args, **kwargs) to Parser.__init__()
-cmd = parser.command('etc')  # first arg is name
+cli = CLI()
+# Also passes (*args, **kwargs) to CLI.__init__()
+cmd = cli.command('etc')  # first arg is name
 ```
 
 ## Why?
@@ -131,17 +131,17 @@ succeeds!
 
 ## Documentation
 
-### Parser
+### CLI
 ```py
-from ergo import Parser
+from ergo import CLI
 ```
 The main dish.  
 
-`parser = Parser(flag_prefix='-', systemexit=True, no_help=False)`
+`cli = CLI(flag_prefix='-', systemexit=True, no_help=False)`
 
 []()
-- `flag_prefix` (`str`): The 'short' prefix used to reference this parser's flags from the command line. Cannot be empty.
-    Derived from this as well is `Parser().long_prefix`, constructed by doubling `flag_prefix`.
+- `flag_prefix` (`str`): The 'short' prefix used to reference this cli's flags from the command line. Cannot be empty.
+    Derived from this as well is `CLI().long_prefix`, constructed by doubling `flag_prefix`.
 - `systemexit` (`bool`): Whether, during parsing, to yield to the default behavior of capturing exceptions then printing them
     in a `SystemExit` call alongside the default help/usage info (`True`) -- or to allow exceptions to bubble up as normal (`False`).
 - `no_help` (`bool`): If `True`, prevents creation of a default `h` (short) / `help` (long) flag.
@@ -150,12 +150,12 @@ Methods:
 - `flag` (decorator):  
     See [`Callbacks`](#callbacks) for more info.  
     
-    `@parser.flag(dest=None, short=_Null, *, default=_Null, namespace=None, required=False, help=None, _='-')`
+    `@cli.flag(dest=None, short=_Null, *, default=_Null, namespace=None, required=False, help=None, _='-')`
     
     []()
     - `dest` (`str`): The name this flag will be referenced by from the command line (with long prefix), as well as the name it will
-        appear as in the final `Parser.parse()` output. Defaults to the decorated function's `__name__`.
-    - `short` (`str`): This flag's single-character short alias, to be used from the command line with `parser.flag_prefix`. If `None`,
+        appear as in the final `CLI.parse()` output. Defaults to the decorated function's `__name__`.
+    - `short` (`str`): This flag's single-character short alias, to be used from the command line with `cli.flag_prefix`. If `None`,
         no short alias will be made; if left alone (i.e. passed `ergo.misc._Null`), defaults to the first alphanumeric character in the
         decorated function's `__name__`.
     - `default`: Default value of this flag if not invoked during parsing. (no default value if `_Null`)
@@ -170,7 +170,7 @@ Methods:
 - `arg` (decorator):  
     See [`Callbacks`](#callbacks) for more info.  
     
-    `@parser.arg(n=1, *, namespace=None, required=False, help=None, _='-')`  
+    `@cli.arg(n=1, *, namespace=None, required=False, help=None, _='-')`  
     *See identical args of `flag`.*
     
     []()
@@ -180,12 +180,12 @@ Methods:
     calls.
     If `n` is `...` or `Ellipsis`, this arg will consume as many arguments as it can (excluding flags)
     before reaching either a flag or a subcommand.  
-    Intended to be used as a positional argument, as in `@parser.arg(2)` or `@parser.arg(...)`.
+    Intended to be used as a positional argument, as in `@cli.arg(2)` or `@cli.arg(...)`.
 - `clump` (decorator):  
-    Each component (AND, OR, XOR) takes an identifier, and any other entity bound to this parser with
+    Each component (AND, OR, XOR) takes an identifier, and any other entity bound to this cli with
     the same identifier is considered part of the same clump.  
     
-    `@parser.clump(AND=_Null, OR=_Null, XOR=_Null)`
+    `@cli.clump(AND=_Null, OR=_Null, XOR=_Null)`
     
     []()
     - `AND`: Clumps together entities that *must* appear together. An ANDed entity is excused from being invoked if it is
@@ -196,12 +196,12 @@ Methods:
     - `XOR`: Clumps together entities of which *at most one* can appear. An XORed entity is allowed to appear alongside more than one
         other if it satisfies an AND clump (i.e. all other members of its AND clump appeared).
 - `command`:  
-    Returns a sub-parser of this parser. When a command is detected in parsing input, parsing of its parent's options is abandoned and everything
-    to the right is passed to the subparser instance.  
+    Returns a sub-command of this cli. When a command is detected in parsing input, parsing of its parent's options is abandoned and everything
+    to the right is passed to the subcommand instance.  
     
-    `parser.command(name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, _='-', **kwargs)`  
+    `cli.command(name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, _='-', **kwargs)`  
     *See identical args of `flag` and `clump`.*  
-    *\*args, \*\*kwargs are passed to `Parser.__init__()`.*
+    *\*args, \*\*kwargs are passed to `CLI.__init__()`.*
     
     []()
     - `name` (`str`): The name with which this command is to be invoked from the command line, as well as the name under which its final parsed
@@ -210,42 +210,42 @@ Methods:
 - `remove`:
     Removes an entity, be it an arg, flag, or command.
     
-    `parser.remove(name)`
+    `cli.remove(name)`
 
     []()
     - `name` (`str`, `Entity`): Name of arg to remove. If passed an Entity instance, uses its name instead.
 - `parse`:
-    Applies parser's args/flags/commands/groups/clumps to its given input.
+    Applies cli's args/flags/commands/groups/clumps to its given input.
 
-    `parser.parse(inp=sys.argv[1:], *, systemexit=None, strict=False)`
+    `cli.parse(inp=sys.argv[1:], *, systemexit=None, strict=False)`
 
     []()
     - `inp` (`str`, `list`): Input to parse args of. If given as a string, converted using `shlex.split()`.
-    - `systemexit`: If set, overrides parser-level `systemexit` attribute. Has the same meaning, then, as `Parser.systemexit`.
+    - `systemexit`: If set, overrides CLI-level `systemexit` attribute. Has the same meaning, then, as `CLI.systemexit`.
     - `strict`: If `True`, parses in "strict mode": Unknown flags will cause an error rather than be ignored, and a bad amount
     of arguments (too few/too many) will do the same.
 - `__setattr__`:  
-    Parsers have `__setattr__` overridden to facilitate the creation of "groups", which apply their clump settings to themselves as a whole
-    rather than each of their members individually. Entities can also be clumped within groups.  
+    CLI objects have `__setattr__` overridden to facilitate the creation of "groups", which apply their clump settings to themselves
+    as a whole rather than each of their members individually. Entities can also be clumped within groups.
     
-    `parser.group_name_here = Group(*, required=False, AND=_Null, OR=_Null, XOR=_Null)`  
+    `cli.group_name_here = Group(*, required=False, AND=_Null, OR=_Null, XOR=_Null)`  
     *See identical args of `flag` and `clump`.*
 
     If the R-value is not an `ergo.Group` instance, the setattr call will go through normally.
 
-    After the creation of a group, its methods such as `clump` (for internal clumping) can be accessed as `@parser.group_name_here.clump()`;
+    After the creation of a group, its methods such as `clump` (for internal clumping) can be accessed as `@cli.group_name_here.clump()`;
     others are `arg`, `flag`, and `command`.
 
 
 ### Callbacks
-`Parser.flag` and `Parser.arg` decorate functions; these functions are subsequently called when their flag/arg's name is detected during parsing.
+`CLI.flag` and `CLI.arg` decorate functions; these functions are subsequently called when their flag/arg's name is detected during parsing.
 
 If a callback's parameters are [type-hinted](https://www.python.org/dev/peps/pep-3107/), the arguments passed will attempt to be "converted" by
 these typehints. That is, if the hint is a callable object, it will be called on a command-line argument passed in that spot. Consider the
 following flag:
 
 ```py
-@parser.flag('addition')
+@cli.flag('addition')
 def add(a: int, b: int):
     """Who needs a calculator"""
     return a + b
@@ -258,22 +258,22 @@ The number of arguments to be passed to a *flag* is determined by the number of 
 writes the flag's name, and arg callbacks are called as many times as indicated by the `n` argument in `@arg()`. As an example for the latter, consider the following setup:
 
 ```py
-@parser.arg()  # n = 1
+@cli.arg()  # n = 1
 def integer(value: int):
     return value
 
-@parser.arg(2, namespace={'accumulate': []})
+@cli.arg(2, namespace={'accumulate': []})
 def floats(nsp, value: float):
     nsp.accumulate.append(value)
     return nsp.accumulate
 
-@parser.arg(..., namespace={'count': 0})
+@cli.arg(..., namespace={'count': 0})
 def num_rest(nsp, _):
     nsp.count += 1
     return str(nsp.count)
 ```
 
-If this parser.parse() is invoked with the input `1  2.7  3.6  abc  xyz`:
+If this cli.parse() is invoked with the input `1  2.7  3.6  abc  xyz`:
 - The `integer` arg will take one value, the first `1`
 - The `floats` arg has `n = 2`, so it will be called on each of `2.7` and `3.6` in order, each time
     appending the value to its namespace's `accumulate` list
@@ -292,7 +292,7 @@ Speaking of consuming, now, let's take a look at a more-involved flag-callback e
 the [`Example`](#example) above:
 
 ```py
-@parser.flag('addition')
+@cli.flag('addition')
 def add(a: int = 4, *b: int):
     """Who needs a calculator"""
     return a + sum(b)
@@ -327,14 +327,14 @@ Ergo itself provides two additional typehint aids: `booly` and `auto`.
     Applying the bitwise negation operator, as in `~auto(*types)`, will cause it to instead ensure that the object passes a **`not`**`isinstance(object, types)` check.
 
 
-Feel free to play around with different `parser.parse()` arguments on the below example:
+Feel free to play around with different `cli.parse()` arguments on the below example:
 
 ```py
-from ergo import auto, booly, Parser
+from ergo import auto, booly, CLI
 
-parser = Parser()
+cli = CLI()
 
-@parser.flag()
+@cli.flag()
 def typehint_stuff(a: booly, b: auto, c: auto(list, tuple), d: ~auto(str)):
     return a, b, c, d
 ```
