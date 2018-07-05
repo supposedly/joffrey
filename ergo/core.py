@@ -346,18 +346,20 @@ class ParserBase(_Handler, HelperMixin):
               )(lambda name=None: self.help(name))
             del self._aliases['<lambda>']
     
-    def __setattr__(self, name, value):
-        if not isinstance(value, Group):
-            return object.__setattr__(self, name, value)
+    def __setattr__(self, name, val):
+        if not isinstance(val, Group):
+            return object.__setattr__(self, name, val)
         
         if name in vars(self):
             raise ValueError('Group name already in use for this parser: ' + name)
-        group = _Group(self, name)
-        if value.required:
-            self._required.add(group.name)
-        self._groups.add(group)
-        self._clump(group, value.AND, value.OR, value.XOR)
-        object.__setattr__(self, name, group)
+        if val._required:
+            self._required.add(name)
+        
+        self._groups.add(val)
+        self._clump(val, val._and, val._or, val._xor)
+        
+        SubHandler.__init__(val, self, name)
+        object.__setattr__(self, name, val)
     
     def dealias(self, name):
         try:
@@ -539,7 +541,17 @@ class SubHandler(_Handler):
         return ClumpGroup(self._aliases.get(i, i) for i in chain(self._xor, self.parent.parent_xor))
 
 
-class _Group(SubHandler):
+class Group(SubHandler):
+    def __init__(self, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
+        """
+        Parser later calls `SubHandler.__init__(Group(), self, name)` in its __setattr__()
+        (All instance attributes are overridden by this)
+        """
+        self._required = required
+        self._and = AND
+        self._or = OR
+        self._xor = XOR
+    
     def arg(self, n=1, **kwargs):
         """
         n: number of times this arg should be received consecutively; pass ... for infinite
@@ -572,14 +584,6 @@ class _Group(SubHandler):
             self.flags[entity.name] = entity
             return self.parent.flag(dest, short, **kwargs)(entity.func)
         return inner
-
-
-class Group:
-    def __init__(self, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
-        self.required = required
-        self.AND = AND
-        self.OR = OR
-        self.XOR = XOR
 
 
 class Subparser(SubHandler, ParserBase):

@@ -12,18 +12,20 @@ _Null = type(
     '__repr__': lambda self: '<_Null>',
   }
   )()
+VAR_POSITIONAL, KEYWORD_ONLY = inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.KEYWORD_ONLY
 
 
 def typecast(func):
     params = inspect.signature(func).parameters.values()
-    defaults = [p.default for p in params]
+    defaults = [p.default for p in params if p.kind != VAR_POSITIONAL]
+    _has_var_pos = len(defaults) != len(params)
     num_expected = sum(d is inspect._empty for d in defaults)
     # Prepare list/dict of all positional/keyword args with annotation or None
     pos_annot_, kw_annot = (
-      [func.__annotations__.get(p.name) for p in params if p.kind < 3],
-      {p.name if p.kind == 3 else None: func.__annotations__.get(p.name) for p in params if p.kind >= 3}
+      [func.__annotations__.get(p.name) for p in params if p.kind < KEYWORD_ONLY],
+      {p.name if p.kind == KEYWORD_ONLY else None: func.__annotations__.get(p.name) for p in params if p.kind >= KEYWORD_ONLY}
       )
-    # Assign default to handle **kwargs annotation if not given/callable
+    # Assign default to handle **kwargs annotation if not given/not callable
     if not callable(kw_annot.get(None)):
         kw_annot[None] = lambda x: x
     
@@ -37,7 +39,10 @@ def typecast(func):
             # raise TypeError("{}() expected at least {} argument/s, got {}".format(func.__name__, num_expected, len(args)))
         if len(args) < len(pos_annot):
             # typecasting should not apply to default arguments
-            pos_annot = [i < len(args) and v for i, v in enumerate(pos_annot)]
+            # Having values replaced by False, a non-callable, will cause them to
+            # not be typecasted by the genexp below
+            # Also, a var_positional parameter not given arguments should be left as is
+            pos_annot = [i < len(args) and v for i, v in enumerate(pos_annot)][:-_has_var_pos or None]
             args = (*args, *defaults[len(args):])
         # zip_longest to account for any var_positional argument
         fill = zip_longest(pos_annot, args, fillvalue=pos_annot[-1] if pos_annot else None)
