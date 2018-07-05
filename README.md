@@ -29,8 +29,8 @@ pip install ergo
 ```py
 from ergo import CLI, Group
 
-cli = CLI()
-# CLI.__setattr__() on Group objects is special-cased
+cli = CLI('Quick demo program')
+# CLI.__setattr__() on Group objects is special-cased slightly
 cli.sc = Group(XOR=0)  # 0 is just an identifier; it can be anything
 
 
@@ -137,9 +137,10 @@ from ergo import CLI
 ```
 The main dish.  
 
-`cli = CLI(flag_prefix='-', systemexit=True, no_help=False)`
+`cli = CLI(desc='', flag_prefix='-', *, systemexit=True, no_help=False)`
 
 []()
+- `desc` (`str`): A short description of this program. Appears in the help screen.
 - `flag_prefix` (`str`): The 'short' prefix used to reference this cli's flags from the command line. Cannot be empty.
     Derived from this as well is `CLI().long_prefix`, constructed by doubling `flag_prefix`.
 - `systemexit` (`bool`): Whether, during parsing, to yield to the default behavior of capturing exceptions then printing them
@@ -199,7 +200,7 @@ Methods:
     Returns a sub-command of this cli. When a command is detected in parsing input, parsing of its parent's options is abandoned and everything
     to the right is passed to the subcommand instance.  
     
-    `cli.command(name, *args, aliases=(), AND=_Null, OR=_Null, XOR=_Null, _='-', **kwargs)`  
+    `cli.command(name, desc='', *args, aliases=(), from_cli=None, AND=_Null, OR=_Null, XOR=_Null, _='-', **kwargs)`  
     *See identical args of `flag` and `clump`.*  
     *\*args, \*\*kwargs are passed to `CLI.__init__()`.*
     
@@ -207,6 +208,7 @@ Methods:
     - `name` (`str`): The name with which this command is to be invoked from the command line, as well as the name under which its final parsed
         output will appear in its parent's.
     - `aliases` (`tuple`): Alternative names with which this command can be invoked.
+    - `from_cli` (`CLI`): If given, creates a command instance from an existing top-level CLI or command and binds it to this top-level CLI or command.
 - `remove`:
     Removes an entity, be it an arg, flag, or command.
     

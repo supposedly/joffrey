@@ -10,7 +10,7 @@ def cli():
 
 def test_empty_flag_prefix():
     with pytest.raises(ValueError):
-        CLI('')
+        CLI(flag_prefix='')
 
 
 def test_underscore_kwarg(cli):

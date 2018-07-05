@@ -42,9 +42,11 @@ def test_ok_1():
 def test_help():
         cli.format_help()  # codecov...
         with pytest.raises(SystemExit):
-            cli.help()
+            cli.cli_help()
         with pytest.raises(SystemExit):
-            cli.help('verbose')
+            cli.cli_help('verbose')
+        with pytest.raises(SystemExit):
+            cli.cli_help('int')  # gives help for int_cmd
 
 
 def test_subparser_consumes_everything():

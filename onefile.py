@@ -6,8 +6,8 @@ import inspect
 import shlex
 import sys
 from ast import literal_eval
-from functools import wraps, partial
-from itertools import zip_longest, chain
+from functools import partial, wraps
+from itertools import chain, zip_longest
 from types import SimpleNamespace
 from copy import deepcopy
 
@@ -345,16 +345,16 @@ class HelperMixin:
         )
     
     def format_help(self, usage=True, commands=True, help=True):
-        built = []
+        built = ['', self.desc, ''] if self.desc else ['']
         if usage:
             built.append('usage: {}'.format(self.usage_info))
         if commands and self.commands:
-            built.append('subcommands: {}'.format(','.join(map(str, self.all_commands))))
+            built.append('Commands: {}'.format(','.join(map(str, self.all_commands))))
         if help and (usage or commands):
             built.append('')
         if help:
             built.append(self.help_info)
-        return '\n' + '\n'.join(built)
+        return '\n'.join(built)
     
     def print_help(self, usage=True, commands=True, help=True):
         print(self.format_help(usage, commands, help), end='\n\n')
@@ -365,24 +365,25 @@ class HelperMixin:
             raise SystemExit
         raise SystemExit(exc if str(exc) else type(exc))
     
-    def help(self, name=None):
+    def cli_help(self, name=None):
         if name is None:
             self.error()
+        
         entity = self.get(name)
         if entity is None:
             print('No helpable entity named', repr(name))
             raise SystemExit
+        
         try:
             short = getattr(entity, 'short', '')
             aliases = ', '.join(map(repr, (k for k, v in self._aliases.items() if v == name and k != short)))
         except AttributeError:
             aliases = ''
-        print('',
-          entity,
-          'Aliases: {}\n'.format(aliases) if aliases else '',
-          entity.help,
-          sep='\n', end='\n\n'
-          )
+        
+        if aliases:
+            print('', entity, 'Aliases: {}\n'.format(aliases), entity.help, sep='\n', end='\n\n')
+        else:
+            print('', entity, entity.help, sep='\n', end='\n\n')
         raise SystemExit
 
 
@@ -612,18 +613,22 @@ class _Handler:
             return entity
         return inner
     
-    def command(self, name, *args, AND=_Null, OR=_Null, XOR=_Null, aliases=(), _='-', **kwargs):
-        subcli = SubCommand(*args, **kwargs, name=name, parent=self)
+    def command(self, name, desc='', *args, AND=_Null, OR=_Null, XOR=_Null, from_cli=None, aliases=(), _='-', **kwargs):
+        if from_cli is None:
+            subcmd = Command(*args, **kwargs, name=name, desc=desc, parent=self)
+        else:
+            subcmd = Command.from_cli(from_cli, self, name)
         visual_name = name.replace('_', _)
         for alias in aliases:
             self._aliases[alias] = visual_name
-        self._clump(subcli, AND, OR, XOR)
-        self.commands[visual_name] = subcli
-        return subcli
+        self._clump(subcmd, AND, OR, XOR)
+        self.commands[visual_name] = subcmd
+        return subcmd
 
 
 class ParserBase(_Handler, HelperMixin):
-    def __init__(self, flag_prefix='-', systemexit=True, no_help=False):
+    def __init__(self, desc='', flag_prefix='-', *, systemexit=True, no_help=False):
+        self.desc = desc
         self.flag_prefix = flag_prefix
         self.long_prefix = 2 * flag_prefix
         self.systemexit = systemexit
@@ -635,7 +640,7 @@ class ParserBase(_Handler, HelperMixin):
             self.flags['help'] = self.flag(
               'help',
               help="Prints help and exits\nIf given valid NAME, displays that entity's help"
-              )(lambda name=None: self.help(name))
+              )(lambda name=None: self.cli_help(name))
             del self._aliases['<lambda>']
     
     def __setattr__(self, name, val):
@@ -812,10 +817,15 @@ class ParserBase(_Handler, HelperMixin):
             if systemexit is None and self.systemexit or systemexit:
                 self.error(e, help=False)
             raise
+        except SystemExit:
+            if systemexit is None and self.systemexit or systemexit:
+                raise
 
 
 class SubHandler(_Handler):
     def __init__(self, parent, name):
+        if not name:
+            raise ValueError('Sub-handler name cannot be empty')
         self.name = name
         self.parent = parent
         super().__init__()
@@ -878,14 +888,24 @@ class Group(SubHandler):
         return inner
 
 
-class SubCommand(SubHandler, ParserBase):
-    def __init__(self, flag_prefix='-', *, parent, name):
+class Command(SubHandler, ParserBase):
+    def __init__(self, flag_prefix='-', *, parent, name, desc):
         SubHandler.__init__(self, parent, name)
-        ParserBase.__init__(self, flag_prefix)
+        ParserBase.__init__(self, desc, flag_prefix)
     
     def __str__(self):
         return ' {}'.format(self.name)
     
+    @property
+    def help(self):
+        return self.format_help()
+    
+    @classmethod
+    def from_cli(cls, cli, parent, name):
+        inst = cls(cli.flag_prefix, parent=parent, name=name, desc=cli.desc)
+        vars(inst).update(cli.__dict__)
+        return inst
+
 
 class CLI(ParserBase):
     def parse(self, inp=sys.argv[1:], **kwargs):
