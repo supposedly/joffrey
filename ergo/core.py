@@ -521,6 +521,8 @@ class ParserBase(_Handler, HelperMixin):
         return nsp
     
     def parse(self, inp, *, systemexit=None, strict=False):
+        if isinstance(inp, str):
+            inp = shlex.split(inp)
         try:
             return self.do_parse(inp, strict)
         except Exception as e:

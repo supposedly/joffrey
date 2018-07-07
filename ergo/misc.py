@@ -19,7 +19,7 @@ def _callable(obj):
     return callable(obj) and obj is not inspect._empty
 
 
-def _convert(hint, val):
+def convert(hint, val):
     return hint(val) if _callable(hint) else val
 
 
@@ -45,14 +45,14 @@ def typecast(func):
         if len(args) > len(pos) and not var_pos:
             func(*args, **kwargs)  # Will raise Python TypeError
         
-        args_.extend(starmap(_convert, zip(pos, arg_iter)))
+        args_.extend(starmap(convert, zip(pos, arg_iter)))
         args_.extend(pos_defaults[len(args_):])
         if inspect._empty in args_:
             for idx, (param, hint, passed) in enumerate(zip(params, pos, args_)):
                 if passed is not inspect._empty:
                     continue
                 try:
-                    args_[idx] = _convert(hint, kwargs.pop(param.name))
+                    args_[idx] = convert(hint, kwargs.pop(param.name))
                 except KeyError:
                     func(*(i for i in args_ if i is not inspect._empty), **kwargs_)  # Will raise Python TypeError
         
@@ -62,7 +62,7 @@ def typecast(func):
         
         for name, hint in kw.items():
             try:
-                kwargs_[name] = _convert(hint, kw[name])
+                kwargs_[name] = convert(hint, kw[name])
             except KeyError:
                 default = kw_defaults[name]
                 if default is inspect._empty:
@@ -71,7 +71,7 @@ def typecast(func):
         
         if var_kw:
             hint = var_kw[0]
-            kwargs_.update({name: _convert(hint, val) for name, val in kwargs if name not in kwargs_})
+            kwargs_.update({name: convert(hint, val) for name, val in kwargs if name not in kwargs_})
         
         return func(*args_, **kwargs_)
     return wrapper
