@@ -38,6 +38,9 @@ class Simpleton:
         
         pos = [i for i in params if i.kind <= inspect.Parameter.VAR_POSITIONAL]
         flags = [i for i in params if i.kind == inspect.Parameter.KEYWORD_ONLY]
+        if pos[-1].kind == inspect.Parameter.VAR_POSITIONAL:
+            ###### TODO: ***REMOVED***
+            pass
         self._add_flargs(self.cli, pos, flags)
 
         return self

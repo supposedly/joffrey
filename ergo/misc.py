@@ -1,7 +1,7 @@
 import inspect
 from ast import literal_eval
 from functools import wraps
-from itertools import zip_longest
+from itertools import starmap
 from types import SimpleNamespace
 
 
@@ -10,8 +10,6 @@ _Null = type(
   {
     '__bool__': lambda self: False,
     '__repr__': lambda self: '<_Null>',
-    '__eq__': lambda self, other: other is self or other is inspect._empty,
-    '__hash__': lambda self: id(self) // 16  # XXX: Is this okay?
   }
   )()
 VAR_POSITIONAL, KEYWORD_ONLY = inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.KEYWORD_ONLY
@@ -21,41 +19,61 @@ def _callable(obj):
     return callable(obj) and obj is not inspect._empty
 
 
+def _convert(hint, val):
+    return hint(val) if _callable(hint) else val
+
+
 def typecast(func):
+    def _hint_for(param):
+        return func.__annotations__.get(param.name)
+    
     params = inspect.signature(func).parameters.values()
-    defaults = [p.default for p in params if p.kind != VAR_POSITIONAL]
-    _has_var_pos = len(defaults) != len(params)
-    num_expected = sum(d is inspect._empty for d in defaults)
-    # Prepare list/dict of all positional/keyword args with annotation or None
-    pos_annot_, kw_annot = (
-      [func.__annotations__.get(p.name) for p in params if p.kind < KEYWORD_ONLY],
-      {p.name if p.kind == KEYWORD_ONLY else None: func.__annotations__.get(p.name) for p in params if p.kind >= KEYWORD_ONLY}
-      )
-    # Assign default to handle **kwargs annotation if not given/not callable
-    if not _callable(kw_annot.get(None)):
-        kw_annot[None] = lambda x: x
+    
+    pos = [_hint_for(p) for p in params if p.kind < VAR_POSITIONAL]
+    var_pos = [_hint_for(p) for p in params if p.kind == VAR_POSITIONAL]
+    pos_defaults = [p.default for p in params if p.kind < VAR_POSITIONAL]
+    
+    kw = {p.name: _hint_for(p) for p in params if p.kind == KEYWORD_ONLY}
+    var_kw = [_hint_for(p) for p in params if p.kind > KEYWORD_ONLY]
+    kw_defaults = {p.name: p.default for p in params if p.kind == KEYWORD_ONLY}
     
     @wraps(func)
     def wrapper(*args, **kwargs):
-        pos_annot = pos_annot_
-        if not params:
-            return func(*args, **kwargs)
-        if len(args) < num_expected:  # TODO: do this for kwargs as well (although kwargs won't be an ergo thing)
-            func(*args)  # will raise Python's error
-            # raise TypeError("{}() expected at least {} argument/s, got {}".format(func.__name__, num_expected, len(args)))
-        if len(args) < len(pos_annot):
-            # typecasting should not apply to default arguments
-            # Having values replaced by False, a non-callable, will cause them to
-            # not be typecasted by the genexp below
-            # Also, a var_positional parameter not given arguments should be left as is
-            pos_annot = [i < len(args) and v for i, v in enumerate(pos_annot)][:-_has_var_pos or None]
-            args = (*args, *defaults[len(args):])
-        # zip_longest to account for any var_positional argument
-        fill = zip_longest(pos_annot, args, fillvalue=pos_annot[-1] if pos_annot else None)
-        return func(
-          *(hint(val) if _callable(hint) else val for hint, val in fill),
-          **{a: kw_annot[a](b) if a in kw_annot and _callable(kw_annot[a]) else kw_annot[None](b) for a, b in kwargs.items()}
-          )
+        args_, kwargs_ = [], {}
+        arg_iter = iter(args)
+        
+        if len(args) > len(pos) and not var_pos:
+            func(*args, **kwargs)  # Will raise Python TypeError
+        
+        args_.extend(starmap(_convert, zip(pos, arg_iter)))
+        args_.extend(pos_defaults[len(args_):])
+        if inspect._empty in args_:
+            for idx, (param, hint, passed) in enumerate(zip(params, pos, args_)):
+                if passed is not inspect._empty:
+                    continue
+                try:
+                    args_[idx] = _convert(hint, kwargs.pop(param.name))
+                except KeyError:
+                    func(*(i for i in args_ if i is not inspect._empty), **kwargs_)  # Will raise Python TypeError
+        
+        if var_pos:
+            hint = var_pos[0]
+            args_.extend(map(hint, arg_iter) if _callable(hint) else arg_iter)
+        
+        for name, hint in kw.items():
+            try:
+                kwargs_[name] = _convert(hint, kw[name])
+            except KeyError:
+                default = kw_defaults[name]
+                if default is inspect._empty:
+                    func(*args, **kwargs)  # Will raise Python TypeError
+                kwargs_[name] = default
+        
+        if var_kw:
+            hint = var_kw[0]
+            kwargs_.update({name: _convert(hint, val) for name, val in kwargs if name not in kwargs_})
+        
+        return func(*args_, **kwargs_)
     return wrapper
 
 

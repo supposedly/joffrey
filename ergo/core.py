@@ -188,13 +188,13 @@ class _Handler:
         return self.hasflag(name) or self.hascmd(name) or name in self.arg_map or self._aliases.get(name, _Null) in self.arg_map
     
     def _clump(self, obj, AND, OR, XOR):
-        if AND != _Null:
+        if AND is not _Null:
             self._and.add(And(AND, self))
             And(AND, self).add(obj)
-        if OR != _Null:
+        if OR is not _Null:
             self._or.add(Or(OR, self))
             Or(OR, self).add(obj)
-        if XOR != _Null:
+        if XOR is not _Null:
             self._xor.add(Xor(XOR, self))
             Xor(XOR, self).add(obj)
     
@@ -295,7 +295,7 @@ class _Handler:
             if repeat_count is Ellipsis:
                 self._last_arg_consumes = True
                 repeat_count = 1
-            if default != _Null:
+            if default is not _Null:
                 self._defaults[entity.name] = default
             self.args.extend([entity.name] * repeat_count)
             return entity
@@ -314,7 +314,7 @@ class _Handler:
                     pass
                 else:
                     self._aliases[entity.short] = entity.name
-            if default != _Null:
+            if default is not _Null:
                 self._defaults[entity.identifier] = default
             if required:
                 self._required.add(entity.name)
@@ -589,7 +589,7 @@ class Group(SubHandler):
                     pass
                 else:
                     self._aliases[entity.short] = entity.name
-            if kwargs.get('default', _Null) != _Null:  # could be `in` but we don't want them using _Null
+            if kwargs.get('default', _Null) is not _Null:  # could be `in` but we don't want them using _Null
                 self._defaults[entity.identifier] = kwargs['default']
             if kwargs.get('required'):
                 self._required.add(entity.name)

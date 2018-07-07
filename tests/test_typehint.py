@@ -36,7 +36,7 @@ def test_normal_typecast(parse):
     with pytest.raises(ValueError):
         parse('-s not-an-integer a')
     with pytest.raises(TypeError):
-        parse('-s not-enough-arguments')
+        parse('-s 0')  # not enough arguments
 
 
 def test_auto(parse):
