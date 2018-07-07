@@ -36,7 +36,6 @@ def test_bad_group_names(cli):
 
 
 def test_nonexistents(cli):
-    cli.for_codecov = Group()  # causes the `for g in self._groups` loops to run
     for x in ('remove', 'getarg', 'getflag', 'getcmd'):
         with pytest.raises(KeyError):
             getattr(cli, x)('this does not exist')

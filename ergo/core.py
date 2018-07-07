@@ -188,13 +188,13 @@ class _Handler:
         return self.hasflag(name) or self.hascmd(name) or name in self.arg_map or self._aliases.get(name, _Null) in self.arg_map
     
     def _clump(self, obj, AND, OR, XOR):
-        if AND is not _Null:
+        if AND != _Null:
             self._and.add(And(AND, self))
             And(AND, self).add(obj)
-        if OR is not _Null:
+        if OR != _Null:
             self._or.add(Or(OR, self))
             Or(OR, self).add(obj)
-        if XOR is not _Null:
+        if XOR != _Null:
             self._xor.add(Xor(XOR, self))
             Xor(XOR, self).add(obj)
     
@@ -281,7 +281,7 @@ class _Handler:
             return entity
         return inner
     
-    def arg(self, n=1, *, required=False, namespace=None, help=None):
+    def arg(self, n=1, *, required=False, default=_Null, namespace=None, help=None):
         """
         n: number of times this arg should be received consecutively; ... for infinite
         Expected kwargs: _ (str), help (str)
@@ -295,6 +295,8 @@ class _Handler:
             if repeat_count is Ellipsis:
                 self._last_arg_consumes = True
                 repeat_count = 1
+            if default != _Null:
+                self._defaults[entity.name] = default
             self.args.extend([entity.name] * repeat_count)
             return entity
         return inner
@@ -302,7 +304,8 @@ class _Handler:
     def flag(self, dest=None, short=_Null, *, aliases=(), default=_Null, required=False, namespace=None, help=None, _='-'):
         def inner(cb):
             entity = Flag(cb, namespace=namespace, name=dest, help=help, _=_)
-            if dest is not None:
+            # filter out '<lambda>'
+            if cb.__name__.isidentifier() and dest is not None:
                 self._aliases[cb.__name__] = entity.name
             if short is not None:  # _Null == default; None == none
                 try:
@@ -311,7 +314,7 @@ class _Handler:
                     pass
                 else:
                     self._aliases[entity.short] = entity.name
-            if default is not _Null:
+            if default != _Null:
                 self._defaults[entity.identifier] = default
             if required:
                 self._required.add(entity.name)
@@ -349,7 +352,6 @@ class ParserBase(_Handler, HelperMixin):
               'help',
               help="Prints help and exits\nIf given valid NAME, displays that entity's help"
               )(lambda name=None: self.cli_help(name))
-            del self._aliases['<lambda>']
     
     def __setattr__(self, name, val):
         if not isinstance(val, Group):
@@ -587,7 +589,7 @@ class Group(SubHandler):
                     pass
                 else:
                     self._aliases[entity.short] = entity.name
-            if kwargs.get('default', _Null) is not _Null:  # could be `in` but we don't want them using _Null
+            if kwargs.get('default', _Null) != _Null:  # could be `in` but we don't want them using _Null
                 self._defaults[entity.identifier] = kwargs['default']
             if kwargs.get('required'):
                 self._required.add(entity.name)
@@ -616,7 +618,9 @@ class Command(SubHandler, ParserBase):
 
 
 class CLI(ParserBase):
-    def parse(self, inp=sys.argv[1:], **kwargs):
+    def parse(self, inp=None, **kwargs):
+        if inp is None:
+            inp = sys.argv[1:]
         if isinstance(inp, str):
             inp = shlex.split(inp)
         return super().parse(list(inp), **kwargs)  # inp.copy()

@@ -10,9 +10,15 @@ _Null = type(
   {
     '__bool__': lambda self: False,
     '__repr__': lambda self: '<_Null>',
+    '__eq__': lambda self, other: other is self or other is inspect._empty,
+    '__hash__': lambda self: id(self) // 16  # XXX: Is this okay?
   }
   )()
 VAR_POSITIONAL, KEYWORD_ONLY = inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.KEYWORD_ONLY
+
+
+def _callable(obj):
+    return callable(obj) and obj is not inspect._empty
 
 
 def typecast(func):
@@ -26,7 +32,7 @@ def typecast(func):
       {p.name if p.kind == KEYWORD_ONLY else None: func.__annotations__.get(p.name) for p in params if p.kind >= KEYWORD_ONLY}
       )
     # Assign default to handle **kwargs annotation if not given/not callable
-    if not callable(kw_annot.get(None)):
+    if not _callable(kw_annot.get(None)):
         kw_annot[None] = lambda x: x
     
     @wraps(func)
@@ -47,8 +53,8 @@ def typecast(func):
         # zip_longest to account for any var_positional argument
         fill = zip_longest(pos_annot, args, fillvalue=pos_annot[-1] if pos_annot else None)
         return func(
-          *(hint(val) if callable(hint) else val for hint, val in fill),
-          **{a: kw_annot[a](b) if a in kw_annot and callable(kw_annot[a]) else kw_annot[None](b) for a, b in kwargs.items()}
+          *(hint(val) if _callable(hint) else val for hint, val in fill),
+          **{a: kw_annot[a](b) if a in kw_annot and _callable(kw_annot[a]) else kw_annot[None](b) for a, b in kwargs.items()}
           )
     return wrapper
 
