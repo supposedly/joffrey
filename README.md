@@ -1,4 +1,4 @@
-# Yet Another Command-Line-Argument CLI
+# Yet Another Command-Line-Argument Parser
 
 [![Build Status](https://travis-ci.com/eltrhn/ergo.svg?branch=master)](https://travis-ci.com/eltrhn/ergo)
 [![codecov](https://codecov.io/gh/eltrhn/ergo/branch/master/graph/badge.svg)](https://codecov.io/gh/eltrhn/ergo)
