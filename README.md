@@ -15,16 +15,42 @@ pip install ergo
 
 ## Contents
 
-1. [Example](#example)
-2. [Why?](#why)
+1. [Why?](#why)
+2. [Examples](#examples)
 3. [Documentation](#documentation)
     1. [CLI](#cli)
     2. [Callbacks](#callbacks)
-    3. [Typehinting goodies](#more-typehints)
+    3. [ergo.simple](#ergo-simple)
+    4. [Typehinting goodies](#more-typehints)
 
 [](#separator-for-pypi)
 
-## Example
+
+## Why?
+I needed a way to define sort-of-complex interdependencies between command-line options. None of the packages
+I found\* were able to handle this out of the box to an acceptable degree, so I decided to try my own hand;
+I feel like the lib should be able to handle this stuff itself, without your needing to delegate roles like *"check
+that these two flags aren't used at the same time as this arg"* or *"make sure all these things appear
+together, or alternatively that this second thing does"* to external functions or post-parsing if-statements.
+
+*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which did beat ergo
+to the idea of AND/OR/XOR clumps (by the names of "requires", "wants", and "conflicts"), albeit with a very different
+design philosophy overall; credit's due for (AFAIK) originating that concept, however! I also at about the same time
+found [argh](https://argh.readthedocs.io/en/latest/index.html), which despite not solving the clumping issue appears
+to (by pure coincidence) share a number of features with ergo -- but it's currently looking for maintainers and does
+depend on argparse underneath (which I'm trying my best to get away from), so I'd say we're good.
+
+Ergo, by the way, is still early in alpha. If it really doesn't solve the same problem for you that it does for me,
+I think you'd be better off trying something else; docopt, for example, is superb, and Fire's no-assembly-required
+philosophy is quite fun in its own right.  
+I also, in full disclosure, don't too much enjoy the design of a lot of current argparse-like solutions (really, most
+of them except docopt). As such, in addition to aiding in the creation of such interdependent systems as mentioned
+above, ergo's also my shot at making something that's just enjoyable to work with. Time will have to tell whether it
+succeeds!
+
+[](#separator-for-pypi)
+
+## Examples
 
 ```py
 from ergo import CLI, Group
@@ -83,6 +109,8 @@ Expected no more than one of the following flags/arguments: 'addition', ['scream
 ```
 And the mysterious `help/usage info...`:
 ```
+Quick demo program
+
 usage: <filename here> [-h | --help (NAME)] [-a | --addition (A) B...] [-S | --scream TEXT] [-v | --verbosity] name(1)
 
 ARGS
@@ -95,39 +123,7 @@ FLAGS
 ```
 (To get rid of the default `help` flag, pass `no_help=True` to `CLI()`)
 
-The only things not decorator-based are "groups" and "commands". Commands (subparsers) are CLIs that have a 'name' attribute,
-and groups -- demo'd above -- are applied their clump settings as a whole rather than applying them to each individual
-flag/arg within the group.
-
-```py
-cli = CLI()
-# Also passes (*args, **kwargs) to CLI.__init__()
-cmd = cli.command('etc')  # first arg is name
-```
-
-## Why?
-I needed a way to define sort-of-complex interdependencies between command-line options. None of the packages
-I found\* were able to handle this out of the box to an acceptable degree, so I decided to try my own hand;
-I feel like the lib should be able to handle this stuff itself, without your needing to delegate roles like *"check
-that these two flags aren't used at the same time as this arg"* or *"make sure all these things appear
-together, or alternatively that this second thing does"* to external functions or post-parsing if-statements.
-
-*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which did beat ergo
-to the idea of AND/OR/XOR clumps (by the names of "requires", "wants", and "conflicts"), albeit with a very different
-design philosophy overall; credit's due for (AFAIK) originating that concept, however! I also at about the same time
-found [argh](https://argh.readthedocs.io/en/latest/index.html), which despite not solving the clumping issue appears
-to (by pure coincidence) share a number of features with ergo -- but it's currently looking for maintainers and does
-depend on argparse underneath (which I'm trying my best to get away from), so I'd say we're good.
-
-Ergo, by the way, is still early in alpha. If it really doesn't solve the same problem for you that it does for me,
-I think you'd be better off trying something else; docopt, for example, is superb, and Fire's no-assembly-required
-philosophy is quite fun in its own right.  
-I also, in full disclosure, don't too much enjoy the design of a lot of current argparse-like solutions (really, most
-of them except docopt). As such, in addition to aiding in the creation of such interdependent systems as mentioned
-above, ergo's also my shot at making something that's just enjoyable to work with. Time will have to tell whether it
-succeeds!
-
-[](#separator-for-pypi)
+Additionally, one may use the reduced `ergo.simple` parser. See the [ergo.simple](#ergo-simple) section for more.
 
 ## Documentation
 
@@ -140,7 +136,7 @@ The main dish.
 `cli = CLI(desc='', flag_prefix='-', *, systemexit=True, no_help=False)`
 
 []()
-- `desc` (`str`): A short description of this program. Appears in the help screen.
+- `desc` (`str`): A short description of this program. Appears on the help screen.
 - `flag_prefix` (`str`): The 'short' prefix used to reference this cli's flags from the command line. Cannot be empty.
     Derived from this as well is `CLI().long_prefix`, constructed by doubling `flag_prefix`.
 - `systemexit` (`bool`): Whether, during parsing, to yield to the default behavior of capturing exceptions then printing them
@@ -275,7 +271,7 @@ def num_rest(nsp, _):
     return str(nsp.count)
 ```
 
-If this cli.parse() is invoked with the input `1  2.7  3.6  abc  xyz`:
+If this cli.parse() is invoked with the input `1   2.7   3.6   abc   xyz`:
 - The `integer` arg will take one value, the first `1`
 - The `floats` arg has `n = 2`, so it will be called on each of `2.7` and `3.6` in order, each time
     appending the value to its namespace's `accumulate` list
@@ -310,6 +306,66 @@ If this callback were invoked as...
 - `--addition 1 2 3 4 5 ... n`: would return `sum(range(1, n))` inclusive
 - `--addition 1`: would return `1`
 - `--addition`: would return `4` (default argument)
+
+### ergo.simple
+
+As an alternative to the full `ergo.CLI` parser, one may use (as mentioned above) a reduced form of it, dubbed `ergo.simple`. It works as follows:
+
+```py
+import ergo
+
+@ergo.simple
+def main(positional, *consuming, flag):
+    """Simple-CLI demo"""
+    print('MAIN:', positional, consuming, flag)
+
+@main.command
+def cmd(conv: list = None, *, flag: str.upper):
+    """Subcommand of main"""
+    print('CMD:', conv, flag)
+
+@cmd.command
+def subcmd(*consuming: set, flag: str.lower):
+    """Subcommand of the subcommand"""
+    print('SUBCMD:', consuming, flag)
+```
+```py
+# Simple CLIs can be run on a string (which is shlex.split), list, or None -> sys.argv[1:]
+>>> main.run('one two three four --flag five')
+MAIN: one ('two', 'three', 'four') five
+>>> # Flags get their short aliases; commands are usable as normal
+>>> main.run('hhh -f value cmd test -f screamed')
+CMD: ['t', 'e', 's', 't'] SCREAMED
+MAIN: hhh () value
+# Default argument means no value is required; commands can also be run directly
+>>> cmd.run('-f uppercase')
+CMD: None UPPERCASE
+# Commands can be nested arbitrarily
+>>> main.run('none -f none cmd -f none subcmd sets sets -f WHISPER')
+SUBCMD: ({'s', 'e', 't'}, {'s', 'e', 't'}) whisper
+CMD: None NONE
+MAIN: none () none
+# Commands can also search for their own name in input and run themselves
+# (rudimentary search, though: skips flag values, but not positional arguments)
+>>> subcmd.search('none -f subcmd cmd -f none subcmd sets sets -f WHISPER')
+SUBCMD: ({'s', 'e', 't'}, {'s', 'e', 't'}) whisper
+```
+
+`ergo.simple` has no concept of AND/OR/XOR clumps, so it isn't suitable for an application requiring those. It also handles CLI creation differently
+from the standard `ergo.CLI` object: the latter has the user assign each command-line option its own isolated function that processes & returns a value
+independently of the rest, and once parsed gives back a namespace object with each of said values for the program to use later as it sees fit,
+whereas `ergo.simple` intertwines the "parse + handle each option's value" stage with the "do stuff with said values" stage.
+
+Its implementation works because Python already has syntax to define positional parameters and name-only parameters in a function; positional options
+vs. flags on a command line can easily be likened to these. Currently, however, ergo.simple cannot handle **kwargs by taking arbitrary flags. If that
+turns out to be a necessity at some point down the line, this will change.
+
+If one should wish to configure their `ergo.simple` objects, the following attributes are changeable:
+
+- `ergo.simple._` (`str`): As in `CLI.flag`, this value controls what the `_` character in a Python identifier's name will be replaced with on the command line.
+- `ergo.simple.no_help` (`bool`): Identical to `no_help` in `CLI.__init__()`.
+- `ergo.simple.short_flags` (`bool`): Determines whether to create short aliases out of keyword-parameter names (e.g. `flag` becoming both `--flag` and `-f`).
+
 
 ### More typehints
 Ergo itself provides two additional typehint aids: `booly` and `auto`.

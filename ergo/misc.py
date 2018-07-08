@@ -43,7 +43,7 @@ def typecast(func):
         arg_iter = iter(args)
         
         if len(args) > len(pos) and not var_pos:
-            func(*args, **kwargs)  # Will raise Python TypeError
+            func(*args, **kwargs)  # raise TypeError
         
         args_.extend(starmap(convert, zip(pos, arg_iter)))
         args_.extend(pos_defaults[len(args_):])
@@ -54,7 +54,7 @@ def typecast(func):
                 try:
                     args_[idx] = convert(hint, kwargs.pop(param.name))
                 except KeyError:
-                    func(*(i for i in args_ if i is not inspect._empty), **kwargs_)  # Will raise Python TypeError
+                    func(*(i for i in args_ if i is not inspect._empty), **kwargs_)  # raise TypeError
         
         if var_pos:
             hint = var_pos[0]
@@ -66,7 +66,7 @@ def typecast(func):
             except KeyError:
                 default = kw_defaults[name]
                 if default is inspect._empty:
-                    func(*args, **kwargs)  # Will raise Python TypeError
+                    func(*args, **kwargs)  # raise TypeError
                 kwargs_[name] = default
         
         if var_kw:

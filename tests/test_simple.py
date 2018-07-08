@@ -1,33 +1,87 @@
+from textwrap import dedent
+
 import ergo
 import pytest
 
 
 @ergo.simple
-def main(a: int, *b: list, c: set):
+def main(a: int, *b: list, c: set = None):
     return a, b, c
 
 
-@ergo.simple.command
-def fff(one: str.upper, *, two: lambda x: tuple(map(int, x))):
+@main.command
+def FFF(one: str.upper, *, two: lambda x: tuple(map(int, x))):
+    print(one, two)
     return one, two
 
 
+ergo.simple._ = '.'
+ergo.simple.short_flags = False
+
+
+@ergo.simple
+def main2(*, asd_f):
+    return asd_f
+
+
+ergo.simple._ = '-'
+ergo.simple.short_flags = True
+
+
+@ergo.simple
+def segundo(positional, *consuming, flag):
+    """Simple-CLI demo"""
+    print('MAIN:', positional, consuming, flag)
+
+
+@segundo.command
+def cmd(conv: list = None, *, flag: str.upper):
+    """Subcommand of main"""
+    print('CMD:', conv, flag)
+
+
+@cmd.command
+def subcmd(*consuming: set, flag: str.lower):
+    """Subcommand of the subcommand"""
+    global THE_SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR
+    THE_SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR = consuming
+    print('SUBCMD:', consuming, flag)
+
+
 def test_simple():
-    assert ergo.simple.run('1 2 3 4 --c 5') == (1, (['2'], ['3'], ['4']), {'5'})
+    assert main.run('1 2 3 4 --c 5') == (1, (['2'], ['3'], ['4']), {'5'})
 
 
-def test_simple_cmd():
-    assert fff.run('one -t 234') == ('ONE', (2, 3, 4))
-
-
-simple2 = type(ergo.simple)()
-
-@simple2(_='.', short_flags=False)
-def main2(*, as_df):
-    return as_df
+def test_simple_cmd(capsys):
+    assert FFF.run('one -t 234') == ('ONE', (2, 3, 4))
+    capsys.readouterr()  # discard that ^
+    assert main.run('1 FFF blah -t 2') == (1, (), None)
+    assert capsys.readouterr().out == 'BLAH (2,)\n'
 
 
 def test_delayed_simple_config():
-    assert simple2.run('--as.df 3') == '3'
+    assert main2.run('--asd.f 3') == '3'
     with pytest.raises(TypeError):
-        simple2.run('-a 3')
+        main2.run('-a 3')
+
+
+def test_nested_commands__this_is_also_the_example_in_the_readme(capsys):
+    segundo.run('one two three four --flag five')
+    assert capsys.readouterr().out == "MAIN: one ('two', 'three', 'four') five\n"
+    segundo.run('hhh -f value cmd test --f screamed')
+    assert capsys.readouterr().out == dedent('''\
+      CMD: ['t', 'e', 's', 't'] SCREAMED
+      MAIN: hhh () value
+      ''')
+    cmd.run('-f uppercase')
+    assert capsys.readouterr().out == 'CMD: None UPPERCASE\n'
+    segundo.run('none -f none cmd -f none subcmd sets sets -f WHISPER')
+    assert capsys.readouterr().out == dedent('''\
+      SUBCMD: {} whisper
+      CMD: None NONE
+      MAIN: none () none
+      '''.format(THE_SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR))
+    subcmd.search('none -f subcmd cmd -f none subcmd sets sets -f WHISPER')
+    assert capsys.readouterr().out == 'SUBCMD: {} whisper\n'.format(
+      THE_SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR
+      )

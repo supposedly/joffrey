@@ -348,7 +348,7 @@ class ParserBase(_Handler, HelperMixin):
         if not flag_prefix:
             raise ValueError('Flag prefix cannot be empty')
         if not no_help:
-            self.flags['help'] = self.flag(
+            self.flag(
               'help',
               help="Prints help and exits\nIf given valid NAME, displays that entity's help"
               )(lambda name=None: self.cli_help(name))
