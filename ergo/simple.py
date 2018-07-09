@@ -8,16 +8,18 @@ from .misc import _Null, ErgoNamespace, convert
 
 class Simpleton:
     _ = '-'
-    no_help = False
+    flag_prefix = '-'
     short_flags = True
+    no_help = False
     used = False
-
+    
     def __init__(self, func, cli=None):
-        self.cli = cli or CLI(no_help=self.no_help)
-        # Fossilize these so if they're changed on the class it doesn't modify instance
-        self.no_help = self.no_help
-        self.short_flags = self.short_flags
+        self.cli = cli or CLI(no_help=self.no_help, flag_prefix=self.flag_prefix)
+        # Fossilize these so if they're changed on the class it doesn't modify this instance
         self._ = self._
+        self.flag_prefix = self.flag_prefix
+        self.short_flags = self.short_flags
+        self.no_help = self.no_help
         
         if self.used:
             raise ValueError('Cannot have more than one function per simple command/CLI')
@@ -41,7 +43,13 @@ class Simpleton:
     @staticmethod
     def _null_check(val):
         return val is _Null or val is inspect._empty
-
+    
+    @classmethod
+    def no_top_level(cls, help=''):
+        simple = cls(lambda: None)
+        simple.cli.desc = help
+        return simple
+    
     def _add_flargs(self, cli, pos, flags):
         for arg in pos:
             if arg.kind == inspect.Parameter.VAR_POSITIONAL:
@@ -89,10 +97,14 @@ class Simpleton:
     
     def call(self, **flags):
         args = []
+        commands = []
         for name, val in flags.copy().items():
             if isinstance(val, ErgoNamespace):
-                self.commands[name].call(**dict(val._.items()))
-                del flags[name]
+                # This used to be:
+                # self.commands[name].call(**dict(flags.pop(name)._.items()))
+                # But commands being run before the main callback was bad
+                # So now it's deferred until the `for cmd, flargs in commands:` loop
+                commands.append((self.commands[name], dict(flags.pop(name)._.items())))
             elif name in self._params:
                 args.append(flags.pop(name))
         
@@ -108,7 +120,12 @@ class Simpleton:
         
         if self._consuming:
             args.extend(args.pop(-1))
-        return self._callback(*args, **flags)
+        
+        ret = self._callback(*args, **flags)
+        
+        for cmd, flargs in commands:
+            cmd.call(**flargs)
+        return ret
     
     def run(self, inp=None):
         return self.call(**dict(self.cli.parse(inp)._.items()))

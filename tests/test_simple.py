@@ -43,9 +43,12 @@ def cmd(conv: list = None, *, flag: str.upper):
 @cmd.command
 def subcmd(*consuming: set, flag: str.lower):
     """Subcommand of the subcommand"""
-    global THE_SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR
-    THE_SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR = consuming
+    global SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR
+    SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR = consuming
     print('SUBCMD:', consuming, flag)
+
+
+ergo.simple.no_top_level()  # just so that part runs /shrug
 
 
 def test_simple():
@@ -70,18 +73,18 @@ def test_nested_commands__this_is_also_the_example_in_the_readme(capsys):
     assert capsys.readouterr().out == "MAIN: one ('two', 'three', 'four') five\n"
     segundo.run('hhh -f value cmd test --f screamed')
     assert capsys.readouterr().out == dedent('''\
-      CMD: ['t', 'e', 's', 't'] SCREAMED
       MAIN: hhh () value
+      CMD: ['t', 'e', 's', 't'] SCREAMED
       ''')
     cmd.run('-f uppercase')
     assert capsys.readouterr().out == 'CMD: None UPPERCASE\n'
     segundo.run('none -f none cmd -f none subcmd sets sets -f WHISPER')
     assert capsys.readouterr().out == dedent('''\
-      SUBCMD: {} whisper
-      CMD: None NONE
       MAIN: none () none
-      '''.format(THE_SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR))
+      CMD: None NONE
+      SUBCMD: {} whisper
+      '''.format(SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR))
     subcmd.search('none -f subcmd cmd -f none subcmd sets sets -f WHISPER')
     assert capsys.readouterr().out == 'SUBCMD: {} whisper\n'.format(
-      THE_SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR
+      SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR
       )

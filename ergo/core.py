@@ -495,10 +495,6 @@ class ParserBase(_Handler, HelperMixin):
                 entity = self.getflag(flag)
                 parsed[entity.identifier] = prep(entity)(*args)
         
-        if command is not None:
-            value, idx = command
-            parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(inp[idx:], strict)
-        
         if self._last_arg_consumes and len(positionals) > len(self.args):
             zipped_args = zip_longest(map(self.getarg, self.args), positionals, fillvalue=self.getarg(self.args[-1]))
         else:
@@ -507,8 +503,11 @@ class ParserBase(_Handler, HelperMixin):
         for entity, value in zipped_args:
             parsed[entity.identifier] = prep(entity)(value)
         
-        self.enforce_clumps(parsed)
+        if command is not None:
+            value, idx = command
+            parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(inp[idx:], strict)
         
+        self.enforce_clumps(parsed)
         final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
         nsp = ErgoNamespace(**final)
         
@@ -518,13 +517,16 @@ class ParserBase(_Handler, HelperMixin):
               ", ".join(map(repr, self._required.intersection(nsp))) or 'none'
               )
             )
+        
         return nsp
     
-    def parse(self, inp, *, systemexit=None, strict=False):
+    def parse(self, inp=None, *, systemexit=None, strict=False):
+        if inp is None:
+            inp = sys.argv[1:]
         if isinstance(inp, str):
             inp = shlex.split(inp)
         try:
-            return self.do_parse(inp, strict)
+            return self.do_parse(list(inp), strict)  # inp.copy()
         except Exception as e:
             if systemexit is None and self.systemexit or systemexit:
                 self.error(e, help=False)
@@ -619,13 +621,6 @@ class Command(SubHandler, ParserBase):
         return inst
 
 
-class CLI(ParserBase):
-    def parse(self, inp=None, **kwargs):
-        if inp is None:
-            inp = sys.argv[1:]
-        if isinstance(inp, str):
-            inp = shlex.split(inp)
-        return super().parse(list(inp), **kwargs)  # inp.copy()
-    
+class CLI(ParserBase):    
     def __str__(self):
         return ''

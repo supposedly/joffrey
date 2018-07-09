@@ -330,41 +330,46 @@ def subcmd(*consuming: set, flag: str.lower):
     print('SUBCMD:', consuming, flag)
 ```
 ```py
-# Simple CLIs can be run on a string (which is shlex.split), list, or None -> sys.argv[1:]
+# Simple CLIs can be run on a string (which will be shlex.split), list, or None/nothing -> sys.argv[1:]
 >>> main.run('one two three four --flag five')
 MAIN: one ('two', 'three', 'four') five
 >>> # Flags get their short aliases; commands are usable as normal
 >>> main.run('hhh -f value cmd test -f screamed')
-CMD: ['t', 'e', 's', 't'] SCREAMED
 MAIN: hhh () value
+CMD: ['t', 'e', 's', 't'] SCREAMED
 # Default argument means no value is required; commands can also be run directly
 >>> cmd.run('-f uppercase')
 CMD: None UPPERCASE
 # Commands can be nested arbitrarily
 >>> main.run('none -f none cmd -f none subcmd sets sets -f WHISPER')
-SUBCMD: ({'s', 'e', 't'}, {'s', 'e', 't'}) whisper
-CMD: None NONE
 MAIN: none () none
+CMD: None NONE
+SUBCMD: ({'s', 'e', 't'}, {'s', 'e', 't'}) whisper
 # Commands can also search for their own name in input and run themselves
 # (rudimentary search, though: skips flag values, but not positional arguments)
 >>> subcmd.search('none -f subcmd cmd -f none subcmd sets sets -f WHISPER')
 SUBCMD: ({'s', 'e', 't'}, {'s', 'e', 't'}) whisper
 ```
 
-`ergo.simple` has no concept of AND/OR/XOR clumps, so it isn't suitable for an application requiring those. It also handles CLI creation differently
-from the standard `ergo.CLI` object: the latter has the user assign each command-line option its own isolated function that processes & returns a value
-independently of the rest, and once parsed gives back a namespace object with each of said values for the program to use later as it sees fit,
-whereas `ergo.simple` intertwines the "parse + handle each option's value" stage with the "do stuff with said values" stage.
+`ergo.simple` has no concept of AND/OR/XOR clumps, so it isn't suitable for an application requiring those. It also, rather than being only a *parsing*
+tool, somewhat submits to the "click philosophy" of intertwining argument parsing with the actual program execution: rather than assign each individual
+option a function processing only its own value and provide these values to the user without caring what happens afterward (as the standard `ergo.CLI`
+does), it expects the actual functions of a given program to be decorated and passes CLI arguments to them directly. This is a bit iffy, but it does
+make for less boilerplate... overall, however, `ergo.CLI` should be preferred when possible.
 
 Its implementation works because Python already has syntax to define positional parameters and name-only parameters in a function; positional options
-vs. flags on a command line can easily be likened to these. Currently, however, ergo.simple cannot handle **kwargs by taking arbitrary flags. If that
+vs. flags on a command line can be likened to these easily. Currently, however, ergo.simple cannot handle **kwargs by taking arbitrary flags. If that
 turns out to be a necessity at some point down the line, this will change.
 
-If one should wish to configure their `ergo.simple` objects, the following attributes are changeable:
+If one should wish to configure their new `ergo.simple` objects, the following class attributes are reassignable:
 
 - `ergo.simple._` (`str`): As in `CLI.flag`, this value controls what the `_` character in a Python identifier's name will be replaced with on the command line.
+- `ergo.simple.flag_prefix` (`str`): Identical to `flag_prefix` in `CLI.__init__()`.
 - `ergo.simple.no_help` (`bool`): Identical to `no_help` in `CLI.__init__()`.
 - `ergo.simple.short_flags` (`bool`): Determines whether to create short aliases out of keyword-parameter names (e.g. `flag` becoming both `--flag` and `-f`).
+
+Note that changing these will not change their values for already-instantiated objects.  
+Note also that decorated functions still define `__call__`, so they can be called as normal rather than with `.run()` or `.search()`.
 
 
 ### More typehints
