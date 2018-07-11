@@ -7,8 +7,8 @@ import inspect
 import sys
 import os
 from ast import literal_eval
-from functools import wraps, partial
-from itertools import zip_longest, chain, starmap
+from functools import partial, wraps
+from itertools import chain, zip_longest, starmap
 from types import SimpleNamespace
 from copy import deepcopy
 

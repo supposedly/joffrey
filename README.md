@@ -20,7 +20,7 @@ pip install ergo
 3. [Documentation](#documentation)
     1. [CLI](#cli)
     2. [Callbacks](#callbacks)
-    3. [ergo.simple](#ergo-simple)
+    3. [Simple CLI](#simple-cli)
     4. [Typehinting goodies](#more-typehints)
 
 [](#separator-for-pypi)
@@ -307,7 +307,7 @@ If this callback were invoked as...
 - `--addition 1`: would return `1`
 - `--addition`: would return `4` (default argument)
 
-### ergo.simple
+### Simple CLI
 
 As an alternative to the full `ergo.CLI` parser, one may use (as mentioned above) a reduced form of it, dubbed `ergo.simple`. It works as follows:
 
@@ -333,7 +333,7 @@ def subcmd(*consuming: set, flag: str.lower):
 # Simple CLIs can be run on a string (which will be shlex.split), list, or None/nothing -> sys.argv[1:]
 >>> main.run('one two three four --flag five')
 MAIN: one ('two', 'three', 'four') five
->>> # Flags get their short aliases; commands are usable as normal
+# Flags get their short aliases; commands are usable as normal
 >>> main.run('hhh -f value cmd test -f screamed')
 MAIN: hhh () value
 CMD: ['t', 'e', 's', 't'] SCREAMED
@@ -358,7 +358,7 @@ does), it expects the actual functions of a given program to be decorated and pa
 make for less boilerplate... overall, however, `ergo.CLI` should be preferred when possible.
 
 Its implementation works because Python already has syntax to define positional parameters and name-only parameters in a function; positional options
-vs. flags on a command line can be likened to these easily. Currently, however, ergo.simple cannot handle **kwargs by taking arbitrary flags. If that
+& flags on a command line can be likened to these easily. Currently, however, `ergo.simple` cannot handle **kwargs by taking arbitrary flags. If that
 turns out to be a necessity at some point down the line, this will change.
 
 If one should wish to configure their new `ergo.simple` objects, the following class attributes are reassignable:
