@@ -34,6 +34,7 @@ class Simpleton:
         
         pos = [i for i in self._params if i.kind <= inspect.Parameter.VAR_POSITIONAL]
         flags = [i for i in self._params if i.kind == inspect.Parameter.KEYWORD_ONLY]
+        
         self._consuming = pos and pos[-1].kind == inspect.Parameter.VAR_POSITIONAL
         self._add_flargs(self.cli, pos, flags)
     
@@ -54,11 +55,11 @@ class Simpleton:
         for arg in pos:
             if arg.kind == inspect.Parameter.VAR_POSITIONAL:
                 def __hidden(arg):
-                    def __(nsp, value):
+                    def __inner(nsp, value):
                         nsp.accum.append(convert(arg.annotation, value))
                         return nsp.accum
-                    __.__name__ = arg.name
-                    return __
+                    __inner.__name__ = arg.name
+                    return __inner
                 cli.arg(
                   Ellipsis,
                   namespace={'accum': []},
@@ -67,10 +68,10 @@ class Simpleton:
                 )(__hidden(arg))
             else:
                 def __hidden(arg):
-                    def __(value):
+                    def __inner(value):
                         return convert(arg.annotation, value)
-                    __.__name__ = arg.name
-                    return __
+                    __inner.__name__ = arg.name
+                    return __inner
                 cli.arg(
                   required=self._null_check(arg.default),
                   default=_Null if self._null_check(arg.default) else arg.default,
@@ -78,10 +79,10 @@ class Simpleton:
         
         for flag in flags:
             def __hidden(flag):
-                def __(value):
+                def __inner(value):
                     return convert(flag.annotation, value)
-                __.__name__ = flag.name
-                return __
+                __inner.__name__ = flag.name
+                return __inner
             cli.flag(
               short=_Null if self.short_flags else None,
               default=_Null if self._null_check(flag.default) else flag.default,

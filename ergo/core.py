@@ -436,14 +436,18 @@ class ParserBase(_Handler, HelperMixin):
     def _extract_flargs(self, inp, strict=False):
         flags = []
         args = []
-        command = None
         skip = 0
+        command = None
+        allow_flags = True
         for idx, value in enumerate(inp, 1):
             if skip > 0:
                 skip -= 1
                 continue
+            if value == '--':
+                allow_flags = False
+                continue
             
-            if not value.startswith(self.flag_prefix) or value in (self.flag_prefix, self.long_prefix):
+            if (not allow_flags) or (not value.startswith(self.flag_prefix) or value in (self.flag_prefix, self.long_prefix)):
                 if self.hascmd(value):
                     command = (value, idx)
                     break
@@ -452,36 +456,36 @@ class ParserBase(_Handler, HelperMixin):
                     raise TypeError('Too many positional arguments (expected {}, got {})'.format(
                       len(self.args), len(args)
                       ))
-                continue
-            
-            if '=' in value:
-                name, arg = value.lstrip(self.flag_prefix).split('=', 1)
-                if self.hasflag(name):
-                    flags.append((self.dealias(name), [arg] if arg else []))
-                elif strict:
-                    raise TypeError("Unknown flag `{}'".format(value.split('=')[0]))
-                continue
-            
-            if value.startswith(self.long_prefix):
-                if self.hasflag(value.lstrip(self.flag_prefix)):  # long
-                    skip = self.getflag(value.lstrip(self.flag_prefix)).argcount
-                    next_pos = next((i for i, v in enumerate(inp[idx:]) if v.startswith(self.flag_prefix)), len(inp))
-                    if next_pos < skip:
-                        skip = next_pos
-                    flags.append((self.dealias(value.lstrip(self.flag_prefix)), inp[idx:skip+idx]))
-                elif strict:
-                    raise TypeError("Unknown flag `{}'".format(value))
-                continue
-            
-            for name in value[1:]:  # short
-                if self.hasflag(name):
-                    skip = self.getflag(name).argcount
-                    next_pos = next((i for i, v in enumerate(inp[idx:]) if v.startswith(self.flag_prefix)), len(inp))
-                    if next_pos < skip:
-                        skip = next_pos
-                    flags.append((self.dealias(name), inp[idx:skip+idx]))
-                elif strict:
-                    raise TypeError("Unknown flag `{}{}'".format(value[0], name))
+            elif allow_flags:
+                if '=' in value:
+                    name, arg = value.lstrip(self.flag_prefix).split('=', 1)
+                    if self.hasflag(name):
+                        flags.append((self.dealias(name), [arg] if arg else []))
+                    elif strict:
+                        raise TypeError("Unknown flag `{}'".format(value.split('=')[0]))
+                    continue
+                
+                if value.startswith(self.long_prefix):
+                    if self.hasflag(value.lstrip(self.flag_prefix)):  # long
+                        skip = self.getflag(value.lstrip(self.flag_prefix)).argcount
+                        next_pos = next((i for i, v in enumerate(inp[idx:]) if v.startswith(self.flag_prefix)), len(inp))
+                        if next_pos < skip:
+                            skip = next_pos
+                        flags.append((self.dealias(value.lstrip(self.flag_prefix)), inp[idx:skip+idx]))
+                    elif strict:
+                        raise TypeError("Unknown flag `{}'".format(value))
+                    continue
+                
+                for name in value[1:]:  # short
+                    if self.hasflag(name):
+                        skip = self.getflag(name).argcount
+                        next_pos = next((i for i, v in enumerate(inp[idx:]) if v.startswith(self.flag_prefix)), len(inp))
+                        if next_pos < skip:
+                            skip = next_pos
+                        flags.append((self.dealias(name), inp[idx:skip+idx]))
+                    elif strict:
+                        raise TypeError("Unknown flag `{}{}'".format(value[0], name))
+        
         return flags, args, command
     
     def do_parse(self, inp=None, strict=False):

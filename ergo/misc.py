@@ -26,7 +26,6 @@ def convert(hint, val):
 def typecast(func):
     def _hint_for(param):
         return func.__annotations__.get(param.name)
-    
     params = inspect.signature(func).parameters.values()
     
     pos = [_hint_for(p) for p in params if p.kind < VAR_POSITIONAL]
@@ -41,10 +40,8 @@ def typecast(func):
     def wrapper(*args, **kwargs):
         args_, kwargs_ = [], {}
         arg_iter = iter(args)
-        
         if len(args) > len(pos) and not var_pos:
             func(*args, **kwargs)  # raise TypeError
-        
         args_.extend(starmap(convert, zip(pos, arg_iter)))
         args_.extend(pos_defaults[len(args_):])
         if inspect._empty in args_:
@@ -55,11 +52,9 @@ def typecast(func):
                     args_[idx] = convert(hint, kwargs.pop(param.name))
                 except KeyError:
                     func(*(i for i in args_ if i is not inspect._empty), **kwargs_)  # raise TypeError
-        
         if var_pos:
             hint = var_pos[0]
             args_.extend(map(hint, arg_iter) if _callable(hint) else arg_iter)
-        
         for name, hint in kw.items():
             try:
                 kwargs_[name] = convert(hint, kw[name])
@@ -68,11 +63,9 @@ def typecast(func):
                 if default is inspect._empty:
                     func(*args, **kwargs)  # raise TypeError
                 kwargs_[name] = default
-        
         if var_kw:
             hint = var_kw[0]
             kwargs_.update({name: convert(hint, val) for name, val in kwargs if name not in kwargs_})
-        
         return func(*args_, **kwargs_)
     return wrapper
 
