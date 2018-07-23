@@ -102,10 +102,10 @@ class Simpleton:
         for name, val in flags.copy().items():
             if isinstance(val, ErgoNamespace):
                 # This used to be:
-                # self.commands[name].call(**dict(flags.pop(name)._.items()))
+                # self.commands[name].call(**dict(flags.pop(name).__.items()))
                 # But commands being run before the main callback was bad
                 # So now it's deferred until the `for cmd, flargs in commands:` loop
-                commands.append((self.commands[name], dict(flags.pop(name)._.items())))
+                commands.append((self.commands[name], dict(flags.pop(name).__.items())))
             elif name in self._params:
                 args.append(flags.pop(name))
         
@@ -129,7 +129,7 @@ class Simpleton:
         return ret
     
     def run(self, inp=None):
-        return self.call(**dict(self.cli.parse(inp)._.items()))
+        return self.call(**dict(self.cli.parse(inp).__.items()))
     
     def search(self, inp):
         if inp is None:

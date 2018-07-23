@@ -164,14 +164,15 @@ class ErgoNamespace(SimpleNamespace):
         yield from vars(self)
     
     @property
-    def _(self):
+    def __(self):
         return SimpleNamespace(
           items=vars(self).items,
           keys=vars(self).keys,
           values=vars(self).values,
+          get=vars(self).get,
           pretty=(lambda self, sep='\n', delim=': ':
             sep.join(
               '{}{}{}'.format(k, delim, v)
-              for k, v in self._.items()
+              for k, v in self.__.items()
             )).__get__(self)
           )
