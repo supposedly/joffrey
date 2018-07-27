@@ -122,6 +122,10 @@ class _Handler:
           )
     
     @property
+    def defaults(self):
+        return ErgoNamespace(**self._defaults)
+    
+    @property
     def parent_and(self):
         return self._and
     
