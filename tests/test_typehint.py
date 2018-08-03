@@ -1,5 +1,5 @@
 import pytest
-from ergo import CLI, auto, booly
+from ergo import CLI, auto, booly, misc as ergo_misc
 
 
 cli = CLI(systemexit=False)
@@ -68,3 +68,12 @@ def test_booly(parse):
     assert all(parse('-b ' + b).boolish is False for b in ('no', 'n', 'false', 'f', '0'))
     with pytest.raises(ValueError):
         parse('-b not_a_booleanlike_string')
+
+
+def test_typecast_with_kwargs():
+    @ergo_misc.typecast
+    def blah(*, a: int, b, c: str = 3):
+        return a, b, c
+    assert blah(a='1', b=2) == (1, 2, 3)
+    with pytest.raises(TypeError):
+        blah('too', 'many', 'pos', 'args', a=None, b=None)

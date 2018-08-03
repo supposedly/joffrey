@@ -57,7 +57,7 @@ def typecast(func):
             args_.extend(map(hint, arg_iter) if _callable(hint) else arg_iter)
         for name, hint in kw.items():
             try:
-                kwargs_[name] = convert(hint, kw[name])
+                kwargs_[name] = convert(hint, kwargs[name])
             except KeyError:
                 default = kw_defaults[name]
                 if default is inspect._empty:

@@ -37,4 +37,4 @@ def try_name(frame_info):
         RuntimeWarning,
         stacklevel=3
         )
-    return None
+    return ''  # would be None, but caller uses` str.startswith'

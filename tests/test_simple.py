@@ -88,3 +88,16 @@ def test_nested_commands__this_is_also_the_example_in_the_readme(capsys):
     assert capsys.readouterr().out == 'SUBCMD: {} whisper\n'.format(
       SETS_HAVE_NO_ORDER_SO_THIS_GLOBAL_LETS_US_TEST_FOR_THEIR_STR
       )
+
+
+def test_nothing_important_but_satisfy_testcov():
+    with pytest.raises(IndexError):
+        subcmd.search('nope')
+    
+    import sys
+    old_argv = sys.argv
+    sys.argv = ['']
+    with pytest.raises(IndexError):
+        subcmd.search(None)
+    sys.argv = old_argv
+    assert main2(asd_f=1) == 1

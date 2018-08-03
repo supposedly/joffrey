@@ -47,6 +47,8 @@ def test_help():
             cli.cli_help('verbose')
         with pytest.raises(SystemExit):
             cli.cli_help('int')  # gives help for int_cmd
+        with pytest.raises(SystemExit):
+            cli.cli_help('does_not_exist')  # 'no helpable entity'
 
 
 def test_subparser_consumes_everything():

@@ -11,7 +11,6 @@ class Simpleton:
     flag_prefix = '-'
     short_flags = True
     no_help = False
-    used = False
     
     def __init__(self, func, cli=None):
         self.cli = cli or CLI(no_help=self.no_help, flag_prefix=self.flag_prefix)
@@ -20,10 +19,6 @@ class Simpleton:
         self.flag_prefix = self.flag_prefix
         self.short_flags = self.short_flags
         self.no_help = self.no_help
-        
-        if self.used:
-            raise ValueError('Cannot have more than one function per simple command/CLI')
-        self.used = True
         
         self._consuming = False
         self.commands = {}
@@ -47,9 +42,9 @@ class Simpleton:
     
     @classmethod
     def no_top_level(cls, help=''):
-        simple = cls(lambda: None)
-        simple.cli.desc = help
-        return simple
+        new = cls(lambda: None)
+        new.cli.desc = help
+        return new
     
     def _add_flargs(self, cli, pos, flags):
         for arg in pos:
@@ -115,8 +110,8 @@ class Simpleton:
           else flags.pop(p.name)
             if p.name in flags or p.default is inspect._empty
           else p.default
-          for p in self._params
-          if p.kind <= inspect.Parameter.VAR_POSITIONAL
+            for p in self._params
+            if p.kind <= inspect.Parameter.VAR_POSITIONAL
           ]
         
         if self._consuming:
@@ -131,7 +126,7 @@ class Simpleton:
     def run(self, inp=None):
         return self.call(**dict(self.cli.parse(inp).__.items()))
     
-    def search(self, inp):
+    def search(self, inp=None):
         if inp is None:
             inp = sys.argv[1:]
         if isinstance(inp, str):
