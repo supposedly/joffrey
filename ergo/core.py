@@ -2,13 +2,15 @@
 argparse sucks
 this sucks too but less
 """
+import inspect
 import os
 import sys
 import shlex
+import warnings
 from functools import partial
 from itertools import chain, zip_longest
 
-from . import errors
+from . import errors, _private
 from .clumps import And, Or, Xor, ClumpGroup
 from .entity import Entity, Arg, Flag
 from .misc import ErgoNamespace, _Null
@@ -275,7 +277,6 @@ class _Handler:
                   **err_details,
                   failed=all_failed, eliminating=not_received, not_exempt=not_exempt
                   )
-        
         return True
     
     def clump(self, *, AND=_Null, OR=_Null, XOR=_Null):
@@ -528,13 +529,17 @@ class ParserBase(_Handler, HelperMixin):
         
         return nsp
     
-    def parse(self, inp=None, *, systemexit=None, strict=False):
+    def parse(self, inp=None, *, systemexit=None, strict=False, require_main=False):
+        if require_main and not _private.importer_is_main(depth=require_main):
+            return self.defaults
+        
         if inp is None:
             inp = sys.argv[1:]
         if isinstance(inp, str):
             inp = shlex.split(inp)
+        
         try:
-            return self.do_parse(list(inp), strict)  # inp.copy()
+            return self.do_parse(list(inp), strict)  # == inp.copy()
         except Exception as e:
             if systemexit is None and self.systemexit or systemexit:
                 self.error(e, help=False)
@@ -625,7 +630,7 @@ class Command(SubHandler, ParserBase):
     @classmethod
     def from_cli(cls, cli, parent, name):
         inst = cls(cli.flag_prefix, parent=parent, name=name, desc=cli.desc)
-        vars(inst).update(cli.__dict__)
+        inst.__dict__.update(vars(cli))
         return inst
 
 

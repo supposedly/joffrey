@@ -215,13 +215,18 @@ Methods:
 - `parse`:
     Applies cli's args/flags/commands/groups/clumps to its given input.
 
-    `cli.parse(inp=sys.argv[1:], *, systemexit=None, strict=False)`
+    `cli.parse(inp=sys.argv[1:], *, systemexit=None, strict=False, require_main=False)`
 
     []()
-    - `inp` (`str`, `list`): Input to parse args of. If given as a string, converted using `shlex.split()`.
-    - `systemexit`: If set, overrides CLI-level `systemexit` attribute. Has the same meaning, then, as `CLI.systemexit`.
+    - `inp` (`str`, `list`): Input to parse args of. Converted using `shlex.split()` if given as a string.
+    - `systemexit`: If not None, overrides the CLI-level `systemexit` attribute. Has the same meaning, then, as `CLI.systemexit`.
     - `strict`: If `True`, parses in "strict mode": Unknown flags will cause an error rather than be ignored, and a bad amount
-    of arguments (too few/too many) will do the same.
+      of arguments (too few/too many) will do the same.
+    - `require_main` (`bool`, `int`): If set, *only* executes the parse if the module it's being used from is `__main__`, determined
+      by peeking up the stack. This can optionally be an integer instead of a boolean `True`, in which case it represents the amount of
+      stack frames (relative to the ergo module itself) to cover before checking that its `__name__` equals `'__main__'` (anything related
+      to the importlib stack is ignored). Hence, if this is `True` or `1` then the module importing ergo will be checked; if it is `2` then
+      the module importing that module will be checked; and so on.
 - `__setattr__`:  
     CLI objects have `__setattr__` overridden to facilitate the creation of "groups", which apply their clump settings to themselves
     as a whole rather than each of their members individually. Entities can also be clumped within groups.

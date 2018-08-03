@@ -40,3 +40,10 @@ def test_nonexistents(cli):
         with pytest.raises(KeyError):
             getattr(cli, x)('this does not exist')
     assert not cli.hasany('this also does not exist')
+
+
+def test_main(cli):
+    @cli.flag(default=None)
+    def test():
+        return 1
+    assert cli.parse([''], require_main=True) == cli.defaults == {'test': None}
