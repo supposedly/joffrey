@@ -2,11 +2,9 @@
 argparse sucks
 this sucks too but less
 """
-import inspect
 import os
 import sys
 import shlex
-import warnings
 from functools import partial
 from itertools import chain, zip_longest
 
@@ -529,8 +527,8 @@ class ParserBase(_Handler, HelperMixin):
         
         return nsp
     
-    def parse(self, inp=None, *, systemexit=None, strict=False, require_main=False):
-        if require_main and not _private.importer_is_main(depth=require_main):
+    def parse(self, inp=None, *, systemexit=None, strict=False, require_main=False, ignore_pkgs=None):
+        if require_main and not _private.importer_is_main(depth=require_main, ignore_pkgs=ignore_pkgs):
             return self.defaults
         
         if inp is None:
@@ -634,6 +632,6 @@ class Command(SubHandler, ParserBase):
         return inst
 
 
-class CLI(ParserBase):    
-    def __str__(self):
+class CLI(ParserBase):
+    def __str__(self):  # for help screen
         return ''

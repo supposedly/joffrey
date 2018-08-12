@@ -2,11 +2,13 @@ import inspect
 import warnings
 
 
-def importer_is_main(depth):
+def importer_is_main(depth, ignore_pkgs: tuple = None):
+    if ignore_pkgs is None:
+        ignore_pkgs = ('importlib', 'pkg_resources')
     try:
         importer_names = (
             n for n in map(try_name, inspect.stack()[1:])
-            if not n.startswith('importlib')
+            if not n.startswith(ignore_pkgs)
             )
     except TypeError:  # if inspect.stack() doesn't exist
         warnings.warn(
@@ -23,7 +25,6 @@ def importer_is_main(depth):
             name = next(importer_names)
         except StopIteration:
             break
-    
     return name == '__main__'
 
 
@@ -37,4 +38,5 @@ def try_name(frame_info):
         RuntimeWarning,
         stacklevel=3
         )
-    return ''  # would be None, but caller uses` str.startswith'
+    # This would be None, but caller uses str.startswith
+    return ''

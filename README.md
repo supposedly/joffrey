@@ -206,8 +206,8 @@ Methods:
     - `aliases` (`tuple`): Alternative names with which this command can be invoked.
     - `from_cli` (`CLI`): If given, creates a command instance from an existing top-level CLI or command and binds it to this top-level CLI or command.
 - `remove`:
-    Removes an entity, be it an arg, flag, or command.
-    
+    Removes an entity from the CLI, be it an arg, flag, or command.
+
     `cli.remove(name)`
 
     []()
@@ -215,7 +215,7 @@ Methods:
 - `parse`:
     Applies cli's args/flags/commands/groups/clumps to its given input.
 
-    `cli.parse(inp=sys.argv[1:], *, systemexit=None, strict=False, require_main=False)`
+    `cli.parse(inp=sys.argv[1:], *, systemexit=None, strict=False, require_main=False, ignore_pkgs=None)`
 
     []()
     - `inp` (`str`, `list`): Input to parse args of. Converted using `shlex.split()` if given as a string.
@@ -227,6 +227,8 @@ Methods:
       stack frames (relative to the ergo module itself) to cover before checking that its `__name__` equals `'__main__'` (anything related
       to the importlib stack is ignored). Hence, if this is `True` or `1` then the module importing ergo will be checked; if it is `2` then
       the module importing that module will be checked; and so on.
+    - `ignore_pkgs` (`tuple`): Tuple of package-name prefixes to ignore when counting stack frames for `require_main`. If `None`, will
+      ignore packages whose names start with `'importlib'` or `'pkg_resources'` (a.k.a. default behavior).
 - `__setattr__`:  
     CLI objects have `__setattr__` overridden to facilitate the creation of "groups", which apply their clump settings to themselves
     as a whole rather than each of their members individually. Entities can also be clumped within groups.

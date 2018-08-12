@@ -1,7 +1,6 @@
 import pytest
 from ergo import CLI, auto, booly, misc as ergo_misc
 
-
 cli = CLI(systemexit=False)
 
 
@@ -77,3 +76,8 @@ def test_typecast_with_kwargs():
     assert blah(a='1', b=2) == (1, 2, 3)
     with pytest.raises(TypeError):
         blah('too', 'many', 'pos', 'args', a=None, b=None)
+    
+    @ergo_misc.typecast
+    def varkw(**kw: int):
+        return kw
+    assert varkw(a='1', b='2') == {'a': 1, 'b': 2}

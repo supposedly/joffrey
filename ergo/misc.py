@@ -7,10 +7,8 @@ from types import SimpleNamespace
 
 _Null = type(
   '_NullType', (),
-  {
-    '__bool__': lambda self: False,
-    '__repr__': lambda self: '<_Null>',
-  }
+  {'__bool__': lambda self: False,
+   '__repr__': lambda self: '<_Null>'}
   )()
 VAR_POSITIONAL, KEYWORD_ONLY = inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.KEYWORD_ONLY
 
@@ -65,7 +63,7 @@ def typecast(func):
                 kwargs_[name] = default
         if var_kw:
             hint = var_kw[0]
-            kwargs_.update({name: convert(hint, val) for name, val in kwargs if name not in kwargs_})
+            kwargs_.update({name: convert(hint, val) for name, val in kwargs.items() if name not in kwargs_})
         return func(*args_, **kwargs_)
     return wrapper
 
