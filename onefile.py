@@ -808,7 +808,7 @@ class ParserBase(_Handler, HelperMixin):
         flags, positionals, command = self._extract_flargs(inp, strict)
         prep = partial(self._put_nsp, namespaces)
 
-        if self.default_command is not None:
+        if self.default_command is not None and command is None:
             command = self._aliases.get(self.default_command, self.default_command)
             try:
                 parsed[command] = self.getcmd(command).do_parse(inp, strict, systemexit)
