@@ -20,11 +20,11 @@ _FILE = os.path.basename(sys.argv[0])
 class HelperMixin:
     @property
     def all_commands(self):
-        return (*self.commands, *(name for g in self._groups for name in g.commands))
+        return {*self.commands, *(name for g in self._groups for name in g.commands)}
     
     @property
     def all_flags(self):
-        return (*self.flags.values(), *(entity for g in self._groups for entity in g.flags.values()))
+        return self.flags.values()
     
     @property
     def all_args(self):
@@ -499,9 +499,14 @@ class ParserBase(_Handler, HelperMixin):
         flags, positionals, command = self._extract_flargs(inp, strict)
         prep = partial(self._put_nsp, namespaces)
 
-        if command is None and self.default_command is not None:
+        if self.default_command is not None:
             command = self._aliases.get(self.default_command, self.default_command)
-            parsed[command] = self.getcmd(command).do_parse(inp)
+            try:
+                parsed[command] = self.getcmd(command).do_parse(inp, strict, systemexit)
+            except Exception as e:
+                if systemexit is None and self.getcmd(command).systemexit or systemexit:
+                    self.getcmd(command).error(e, help=False)
+                raise
             return ErgoNamespace(**self._defaults, **parsed)
         
         for flag, args in flags:
@@ -536,7 +541,6 @@ class ParserBase(_Handler, HelperMixin):
               ', '.join(map(repr, self._required.intersection(nsp))) or 'none'
               )
             )
-        
         return nsp
     
     def parse(self, inp=None, *, systemexit=None, strict=False, require_main=False, ignore_pkgs=None):
