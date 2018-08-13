@@ -64,3 +64,8 @@ def test_requiring_main(cli):
         cli.parse([''], require_main=True)
     
     inspect.stack = old_stack_fn
+
+
+def test__quote_unquote__subnamespace_for_codecov(cli):
+    cli.flag('a')(lambda: None)
+    cli.parse('-a')._.pretty()

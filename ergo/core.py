@@ -525,7 +525,7 @@ class ParserBase(_Handler, HelperMixin):
                 if systemexit is None and self.getcmd(command).systemexit or systemexit:
                     self.getcmd(command).error(e, help=False)
                 raise
-            return ErgoNamespace(**self._defaults, **parsed)
+            return ErgoNamespace(**self._defaults, **parsed)._.set_default_key(self.default_command)
         
         if self._last_arg_consumes and len(positionals) > len(self.args):
             zipped_args = zip_longest(map(self.getarg, self.args), positionals, fillvalue=self.getarg(self.args[-1]))

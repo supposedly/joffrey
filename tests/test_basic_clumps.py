@@ -74,5 +74,5 @@ def test_namespaces_stateless():
 def test_parser_namespace_attrs():
     nsp = cli.parse('foo -S aaa -v')
     assert (not nsp) is False
-    assert nsp.__.items() == vars(nsp).items()
+    assert nsp._.items() == vars(nsp).items()
     assert nsp.verbosity == nsp['verbosity']

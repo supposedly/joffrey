@@ -92,3 +92,4 @@ def test_conv_failure():
 
 def test_default_command():
     assert cli2.parse('-x cmd a') == cli2.parse('a -x') == {'x': True, 'cmd2': {'blah': 'a'}}
+    assert cli2.parse('-x cmd a').blah == 'a'
