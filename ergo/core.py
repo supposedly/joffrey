@@ -20,14 +20,20 @@ _FILE = os.path.basename(sys.argv[0])
 class HelperMixin:
     @property
     def all_commands(self):
+        if getattr(self, 'default_command', None) is not None:
+            return ({*self.commands, *(name for g in self._groups for name in g.commands)} - {self.default_command}) | self.getcmd(self.default_command).all_commands
         return {*self.commands, *(name for g in self._groups for name in g.commands)}
     
     @property
     def all_flags(self):
+        if getattr(self, 'default_command', None) is not None:
+            return (*self.flags.values(), *self.getcmd(self.default_command).all_flags)
         return self.flags.values()
     
     @property
     def all_args(self):
+        if getattr(self, 'default_command', None) is not None:
+            return self.getcmd(self.default_command).all_args
         return map(self.getarg, self.args)
     
     @property
