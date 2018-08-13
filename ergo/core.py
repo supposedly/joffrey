@@ -57,7 +57,7 @@ class HelperMixin:
         if usage:
             built.append('usage: {}'.format(self.usage_info))
         if commands and self.commands:
-            built.append('Commands: {}'.format(','.join(map(str, self.all_commands))))
+            built.append('commands: {}'.format(', '.join(map(str, self.all_commands))))
         if help and (usage or commands):
             built.append('')
         if help:
@@ -68,7 +68,7 @@ class HelperMixin:
         print(self.format_help(usage, commands, help), end='\n\n')
     
     def error(self, exc=None, help=True):
-        self.print_help(commands=help, help=help)
+        self.print_help(help=help)
         if exc is None:
             raise SystemExit
         raise SystemExit(exc if str(exc) else type(exc))
@@ -341,10 +341,11 @@ class _Handler:
 
 
 class ParserBase(_Handler, HelperMixin):
-    def __init__(self, desc='', flag_prefix='-', *, systemexit=True, no_help=False):
+    def __init__(self, desc='', flag_prefix='-', *, systemexit=True, no_help=False, default_command=None):
         self.desc = desc
         self.flag_prefix = flag_prefix
         self.long_prefix = 2 * flag_prefix
+        self.default_command = default_command
         self.systemexit = systemexit
         self._groups = set()
         super().__init__()
@@ -353,7 +354,7 @@ class ParserBase(_Handler, HelperMixin):
         if not no_help:
             self.flag(
               'help',
-              help="Prints help and exits\nIf given valid NAME, displays that entity's help"
+              help="Prints help and exits\nIf given a valid NAME, displays that entity's help"
               )(lambda name=None: self.cli_help(name))
     
     def __setattr__(self, name, val):
@@ -420,7 +421,7 @@ class ParserBase(_Handler, HelperMixin):
         return super().hasany(name) or self._aliases.get(name, _Null) in self.arg_map
     
     def enforce_clumps(self, parsed):
-        p = set(parsed) | {next((g.name for g in self._groups if g.hasany(i)), None) for i in parsed} - {None}
+        p = set(parsed).union(next((g.name for g in self._groups if g.hasany(i)), None) for i in parsed) - {None}
         return (
           super().enforce_clumps(p, {g.name: g for g in self._groups})
           and
@@ -433,7 +434,7 @@ class ParserBase(_Handler, HelperMixin):
           namespaces.setdefault(
             entity.name,
             ErgoNamespace(**entity.namespace)
-            ),
+            )
           )
     
     def _extract_flargs(self, inp, strict=False):
@@ -446,6 +447,7 @@ class ParserBase(_Handler, HelperMixin):
             if skip > 0:
                 skip -= 1
                 continue
+            
             if value == '--':
                 allow_flags = False
                 continue
@@ -491,11 +493,16 @@ class ParserBase(_Handler, HelperMixin):
         
         return flags, args, command
     
-    def do_parse(self, inp=None, strict=False):
+    def do_parse(self, inp=None, strict=False, systemexit=True):
         parsed = {}
         namespaces = {}
         flags, positionals, command = self._extract_flargs(inp, strict)
         prep = partial(self._put_nsp, namespaces)
+
+        if command is None and self.default_command is not None:
+            command = self._aliases.get(self.default_command, self.default_command)
+            parsed[command] = self.getcmd(command).do_parse(inp)
+            return ErgoNamespace(**self._defaults, **parsed)
         
         for flag, args in flags:
             if self.hasflag(flag):
@@ -512,7 +519,12 @@ class ParserBase(_Handler, HelperMixin):
         
         if command is not None:
             value, idx = command
-            parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(inp[idx:], strict)
+            try:
+                parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(inp[idx:], strict, systemexit)
+            except Exception as e:
+                if systemexit is None and self.getcmd(value).systemexit or systemexit:
+                    self.getcmd(value).error(e, help=False)
+                raise
         
         self.enforce_clumps(parsed)
         final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
@@ -520,8 +532,8 @@ class ParserBase(_Handler, HelperMixin):
         
         if self._required.difference(nsp):
             raise errors.RequirementError('Expected the following required arguments: {}\nGot {}'.format(
-              ", ".join(map(repr, self._required)),
-              ", ".join(map(repr, self._required.intersection(nsp))) or 'none'
+              ', '.join(map(repr, self._required)),
+              ', '.join(map(repr, self._required.intersection(nsp))) or 'none'
               )
             )
         
@@ -537,7 +549,7 @@ class ParserBase(_Handler, HelperMixin):
             inp = shlex.split(inp)
         
         try:
-            return self.do_parse(list(inp), strict)  # == inp.copy()
+            return self.do_parse(list(inp), strict, systemexit)  # == inp.copy()
         except Exception as e:
             if systemexit is None and self.systemexit or systemexit:
                 self.error(e, help=False)
@@ -604,7 +616,7 @@ class Group(SubHandler):
                     pass
                 else:
                     self._aliases[entity.short] = entity.name
-            if kwargs.get('default', _Null) is not _Null:  # could be `in` but we don't want them using _Null
+            if kwargs.get('default', _Null) is not _Null:  # could be `'default' not in ...` but we don't want them using _Null either
                 self._defaults[entity.identifier] = kwargs['default']
             if kwargs.get('required'):
                 self._required.add(entity.name)
@@ -616,7 +628,7 @@ class Group(SubHandler):
 class Command(SubHandler, ParserBase):
     def __init__(self, flag_prefix='-', *, parent, name, desc):
         SubHandler.__init__(self, parent, name)
-        ParserBase.__init__(self, desc, flag_prefix)
+        ParserBase.__init__(self, desc, flag_prefix, systemexit=getattr(parent, 'systemexit', True))
     
     def __str__(self):
         return ' {}'.format(self.name)
@@ -627,11 +639,11 @@ class Command(SubHandler, ParserBase):
     
     @classmethod
     def from_cli(cls, cli, parent, name):
-        inst = cls(cli.flag_prefix, parent=parent, name=name, desc=cli.desc)
-        inst.__dict__.update(vars(cli))
-        return inst
+        obj = cls(cli.flag_prefix, parent=parent, name=name, desc=cli.desc)
+        obj.__dict__.update(vars(cli))
+        return obj
 
 
 class CLI(ParserBase):
-    def __str__(self):  # for help screen
+    def __str__(self):  # for help screen; main CLI shouldn't show its own name
         return ''

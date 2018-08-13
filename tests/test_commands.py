@@ -34,6 +34,15 @@ def integer(num: int):
     return num
 
 
+cli2 = CLI(systemexit=False, default_command='cmd')
+cmd = cli2.command('cmd')
+
+
+@cmd.arg(...)
+def blah(val):
+    return val
+
+
 def test_ok_1():
     done = cli.parse('test')
     assert done.name == 'test'
@@ -74,3 +83,7 @@ def test_arg_failure():
 def test_conv_failure():
     with pytest.raises(ValueError):
         cli.parse('test int what')
+
+
+def test_default_command():
+    assert cli2.parse('cmd a') == cli2.parse('a') == {'cmd': {'blah': 'a'}}
