@@ -6,7 +6,7 @@ import os
 import sys
 import shlex
 from functools import partial
-from itertools import chain, zip_longest
+from itertools import chain, zip_longest, starmap
 
 from . import errors, _private
 from .clumps import And, Or, Xor, ClumpGroup
@@ -443,6 +443,10 @@ class ParserBase(_Handler, HelperMixin):
         skip = 0
         command = None
         allow_flags = True
+        
+        too_many_args = False
+        unknown_flags = []
+
         for idx, value in enumerate(inp, 1):
             if skip > 0:
                 skip -= 1
@@ -458,16 +462,14 @@ class ParserBase(_Handler, HelperMixin):
                     break
                 args.append(value)
                 if strict and len(args) > len(self.args):
-                    raise TypeError('Too many positional arguments (expected {}, got {})'.format(
-                      len(self.args), len(args)
-                      ))
+                    too_many_args = True
             elif allow_flags:
                 if '=' in value:
                     name, arg = value.lstrip(self.flag_prefix).split('=', 1)
                     if self.hasflag(name):
                         flags.append((self.dealias(name), [arg] if arg else []))
                     elif strict:
-                        raise TypeError("Unknown flag `{}'".format(value.split('=')[0]))
+                        unknown_flags.append(('', value.split('=')[0], idx))
                     continue
                 
                 if value.startswith(self.long_prefix):
@@ -478,7 +480,7 @@ class ParserBase(_Handler, HelperMixin):
                             skip = next_pos
                         flags.append((self.dealias(value.lstrip(self.flag_prefix)), inp[idx:skip+idx]))
                     elif strict:
-                        raise TypeError("Unknown flag `{}'".format(value))
+                        unknown_flags.append(('', value, idx))
                     continue
                 
                 for name in value[1:]:  # short
@@ -489,7 +491,18 @@ class ParserBase(_Handler, HelperMixin):
                             skip = next_pos
                         flags.append((self.dealias(name), inp[idx:skip+idx]))
                     elif strict:
-                        raise TypeError("Unknown flag `{}{}'".format(value[0], name))
+                        unknown_flags.append((value[0], name, idx))
+        
+        if self.default_command is None:
+            if too_many_args:
+                raise TypeError('Too many positional arguments (expected {}, got {})'.format(
+                  len(self.args), len(args)
+                ))
+            if unknown_flags:
+                raise TypeError('Unknown flag(s)' + ' '.join(starmap("`{}{}'".format, unknown_flags)))
+        elif command is None:
+            unknown_flags = {i[2] for i in unknown_flags}
+            inp[:] = [v for i, v in enumerate(inp) if i not in unknown_flags]
         
         return flags, args, command
     
@@ -498,7 +511,12 @@ class ParserBase(_Handler, HelperMixin):
         namespaces = {}
         flags, positionals, command = self._extract_flargs(inp, strict)
         prep = partial(self._put_nsp, namespaces)
-
+        
+        for flag, args in flags:
+            if self.hasflag(flag):
+                entity = self.getflag(flag)
+                parsed[entity.identifier] = prep(entity)(*args)
+        
         if self.default_command is not None and command is None:
             command = self._aliases.get(self.default_command, self.default_command)
             try:
@@ -508,11 +526,6 @@ class ParserBase(_Handler, HelperMixin):
                     self.getcmd(command).error(e, help=False)
                 raise
             return ErgoNamespace(**self._defaults, **parsed)
-        
-        for flag, args in flags:
-            if self.hasflag(flag):
-                entity = self.getflag(flag)
-                parsed[entity.identifier] = prep(entity)(*args)
         
         if self._last_arg_consumes and len(positionals) > len(self.args):
             zipped_args = zip_longest(map(self.getarg, self.args), positionals, fillvalue=self.getarg(self.args[-1]))

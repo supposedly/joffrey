@@ -34,11 +34,16 @@ def integer(num: int):
     return num
 
 
-cli2 = CLI(systemexit=False, default_command='cmd')
-cmd = cli2.command('cmd')
+cli2 = CLI(systemexit=False, default_command='cmd2')
+cmd2 = cli2.command('cmd2')
 
 
-@cmd.arg(...)
+@cli2.flag()
+def x():
+    return True
+
+
+@cmd2.arg(...)
 def blah(val):
     return val
 
@@ -86,4 +91,4 @@ def test_conv_failure():
 
 
 def test_default_command():
-    assert cli2.parse('cmd a') == cli2.parse('a') == {'cmd': {'blah': 'a'}}
+    assert cli2.parse('-x cmd a') == cli2.parse('a -x') == {'x': True, 'cmd2': {'blah': 'a'}}

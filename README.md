@@ -133,7 +133,7 @@ from ergo import CLI
 ```
 The main dish.  
 
-`cli = CLI(desc='', flag_prefix='-', *, systemexit=True, no_help=False)`
+`cli = CLI(desc='', flag_prefix='-', *, systemexit=True, no_help=False, default_command=None)`
 
 []()
 - `desc` (`str`): A short description of this program. Appears on the help screen.
@@ -142,6 +142,10 @@ The main dish.
 - `systemexit` (`bool`): Whether, during parsing, to yield to the default behavior of capturing exceptions then printing them
     in a `SystemExit` call alongside the default help/usage info (`True`) -- or to allow exceptions to bubble up as normal (`False`).
 - `no_help` (`bool`): If `True`, prevents creation of a default `h` (short) / `help` (long) flag.
+- `default_command` (`str`): If not `None`, indicates the name of a command (a subcommand of self) that should be used to parse
+  input if no other command is specified at the top level. **Top-level positional args cannot be used with this**, as any provided
+  will be passed to the default command rather than being parsed by the top-level CLI. Top level flags, on the other hand, are allowed,
+  but their names must not conflict with the name of any flag of the default command.
 
 Methods:
 - `flag` (decorator):  
