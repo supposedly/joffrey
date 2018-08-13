@@ -123,7 +123,7 @@ class _Handler:
     
     @property
     def defaults(self):
-        return ErgoNamespace(**self._defaults)
+        return ErgoNamespace(**self._defaults, **{cmd.name: cmd.defaults for cmd in self.commands.values()})
     
     @property
     def parent_and(self):
@@ -371,6 +371,10 @@ class ParserBase(_Handler, HelperMixin):
         
         SubHandler.__init__(val, self, name)
         object.__setattr__(self, name, val)
+    
+    @property
+    def defaults(self):
+        return super().defaults._.set_default_key(self.default_command)
     
     def dealias(self, name):
         try:
