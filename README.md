@@ -20,8 +20,9 @@ pip install ergo
 3. [Documentation](#documentation)
     1. [CLI](#cli)
     2. [Callbacks](#callbacks)
-    3. [Simple CLI](#simple-cli)
-    4. [Typehinting goodies](#more-typehints)
+    3. [Workflow](#workflow)
+    4. [Simple CLI](#simple-cli)
+    5. [Typehinting goodies](#more-typehints)
 
 [](#separator-for-pypi)
 
@@ -324,15 +325,16 @@ If this callback were invoked as...
 - `--addition`: would return `4` (default argument)
 
 ### Workflow
-In a small script without many files, particularly one that's only meant to be run as a command-line script and not used as a Python module, it suffices to
-simply define `cli = ergo.CLI(...)` within it and then call `args = cli.parse()` to make use of its result.
+In a small script without many files, particularly one that's only meant to be run as a command-line script
+and not used as a Python module, it suffices to
+simply define `cli = ergo.CLI(...)` within it and make use thereof with something like `args = cli.parse()`.
 
-However, in a larger application that's to be distributed as both a CLI script and an importable Python module (or, worse, one that started out as only
+However, in a larger application distributed as both a CLI script and an importable Python module (or, worse, one that started out as only
 the former and had to be expanded into an importable module later on), which may comprise individual Python files that all depend on various CLI parameters
 when used from the command line but should function independently when imported... the whole process gets a bit trickier.  
 If the CLI is defined and its parse result computed all in the same file which other application files depend on, the module may error out when it's imported
-for other purposes (i.e. as something other than a command-line application) because it will try to parse sys.argv as normal and will likely find that it is
-in some way invalid -- not knowing that it's supposed to be acting as a Python module which doesn't care about sys.argv rather than as a command-line program.
+for other purposes (i.e. as something other than a command-line application) because it will try to parse sys.argv as normal and will likely find it to be
+in some way invalid -- not knowing that it's supposed to be acting as a Python module that doesn't care about sys.argv rather than as a command-line tool.
 
 The following structure can in this case be used:
 
@@ -371,10 +373,10 @@ def bar():
 ...
 ```
 
-`cli.result` will return a namespace consisting only of the default values *until* `cli.prepare()` is called, after which point `cli.result` will contain the result of
-a `cli.parse()` call with the arguments passed to `cli.prepare()`. This way (specifically, hiding the `cli.prepare()` call in a command-line-entry-point function) the
-application will only act as a CLI program if invoked from the command line, because otherwise `cli.prepare()` and in turn `cli.parse()` will never be called so the files
-that need certain CLI values can simply go on using the defaults.
+`cli.result` will return a namespace consisting solely of the default values *until* `cli.prepare()` is called, only after which it will contain the result of
+a call to `cli.parse()`. This way (specifically, by hiding the `cli.prepare()` call in a function that can only be entered from the command line), the
+application will not attempt to act as a CLI program unless invoked as one; `cli.prepare()` and in turn `cli.parse()` will never be called otherwise, so the other application files
+that need certain CLI values can simply continue using the defaults with no "missing command-line arguments" errors.
 
 ### Simple CLI
 As an alternative to the full `ergo.CLI` parser, one may use (as mentioned above) a reduced form of it, dubbed `ergo.simple`. It works as follows:
