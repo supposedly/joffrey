@@ -42,30 +42,6 @@ def test_nonexistents(cli):
     assert not cli.hasany('this also does not exist')
 
 
-def test_requiring_main(cli):
-    @cli.flag(default=None)
-    def test():
-        return 1
-    assert cli.parse([''], require_main=True) == cli.defaults == {'test': None}
-    
-    import inspect
-    from types import SimpleNamespace as nmspc
-    
-    old_stack_fn = inspect.stack
-    inspect.stack = lambda: None
-    
-    with pytest.warns(RuntimeWarning):
-        cli.parse([''], require_main=True)
-    
-    inspect.stack = lambda: [None,
-      nmspc(frame=nmspc(f_globals={}))
-      ]
-    with pytest.warns(RuntimeWarning):
-        cli.parse([''], require_main=True)
-    
-    inspect.stack = old_stack_fn
-
-
 def test__quote_unquote__subnamespace_for_codecov(cli):
     cli.flag('a')(lambda: None)
     cli.parse('-a')._.pretty()

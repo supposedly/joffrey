@@ -8,7 +8,7 @@ import shlex
 from functools import partial
 from itertools import chain, zip_longest, starmap
 
-from . import errors, _private
+from . import errors
 from .clumps import And, Or, Xor, ClumpGroup
 from .entity import Entity, Arg, Flag
 from .misc import ErgoNamespace, _Null
@@ -243,7 +243,7 @@ class _Handler:
             not_exempt = (all_failed - received) - elim['OR'] - elim['XOR']
             if not_exempt:
                 raise errors.ANDError(
-                  'Expected all of the following flags/arguments: {}\n(Got {})'.format(
+                  'Expected all of the following flags/arguments/commands: {}\n(Got {})'.format(
                       ', '.join(extract_names(all_failed)),
                       ', '.join(extract_names(received)) or 'none'
                     ),
@@ -257,7 +257,7 @@ class _Handler:
             not_exempt = (all_failed - received) - elim['XOR']
             if not_exempt:
                 raise errors.ORError(
-                  'Expected at least one of the following flags/arguments: {}\n(Got none)'.format(
+                  'Expected at least one of the following flags/arguments/commands: {}\n(Got none)'.format(
                       ', '.join(extract_names(all_failed))
                     ),
                   **err_details,
@@ -274,7 +274,7 @@ class _Handler:
             not_exempt = (all_failed - not_received) - elim['AND']
             if len(not_exempt) > 1:
                 raise errors.XORError(
-                  'Expected no more than one of the following flags/arguments: {}\n(Got {})'.format(
+                  'Expected no more than one of the following flags/arguments/commands: {}\n(Got {})'.format(
                       ', '.join(extract_names(all_failed)),
                       ', '.join(extract_names(all_failed-not_received))
                     ),
@@ -348,13 +348,16 @@ class _Handler:
 
 class ParserBase(_Handler, HelperMixin):
     def __init__(self, desc='', flag_prefix='-', *, systemexit=True, no_help=False, default_command=None):
+        super().__init__()
         self.desc = desc
         self.flag_prefix = flag_prefix
         self.long_prefix = 2 * flag_prefix
         self.default_command = default_command
         self.systemexit = systemexit
         self._groups = set()
-        super().__init__()
+        self._prepared_parse = None
+        self._result = None
+        
         if not flag_prefix:
             raise ValueError('Flag prefix cannot be empty')
         if not no_help:
@@ -381,6 +384,14 @@ class ParserBase(_Handler, HelperMixin):
     @property
     def defaults(self):
         return super().defaults._.set_default_key(self.default_command)
+    
+    @property
+    def result(self):
+        if self._prepared_parse is None:
+            return self.defaults
+        if self._result is None:
+            self._result = self._prepared_parse()
+        return self._result
     
     def dealias(self, name):
         try:
@@ -566,10 +577,7 @@ class ParserBase(_Handler, HelperMixin):
             )
         return nsp
     
-    def parse(self, inp=None, *, systemexit=None, strict=False, require_main=False, ignore_pkgs=None):
-        if require_main and not _private.importer_is_main(depth=require_main, ignore_pkgs=ignore_pkgs):
-            return self.defaults
-        
+    def parse(self, inp=None, *, systemexit=None, strict=False):
         if inp is None:
             inp = sys.argv[1:]
         if isinstance(inp, str):
@@ -584,6 +592,9 @@ class ParserBase(_Handler, HelperMixin):
         except SystemExit:
             if systemexit is None and self.systemexit or systemexit:
                 raise
+    
+    def prepare(self, *args, **kwargs):
+        self._prepared_parse = partial(self.parse, *args, **kwargs)
 
 
 class SubHandler(_Handler):

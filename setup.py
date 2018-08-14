@@ -6,7 +6,7 @@ with open('README.md') as f:
 setuptools.setup(
   name='ergo',
   license='MIT',
-  version='0.3.17',
+  version='0.4.0',
   author='Elias Tarhini',
   author_email='eltrhn@gmail.com',
   url='https://github.com/eltrhn/ergo',

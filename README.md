@@ -123,7 +123,7 @@ FLAGS
 ```
 (To get rid of the default `help` flag, pass `no_help=True` to `CLI()`)
 
-Additionally, one may use the reduced `ergo.simple` parser. See the [ergo.simple](#ergo-simple) section for more.
+Additionally, one may use the reduced `ergo.simple` parser. See the [ergo.simple](#simple-cli) section for more.
 
 ## Documentation
 
@@ -144,8 +144,8 @@ The main dish.
 - `no_help` (`bool`): If `True`, prevents creation of a default `h` (short) / `help` (long) flag.
 - `default_command` (`str`): If not `None`, indicates the name of a command (a subcommand of self) that should be used to parse
   input if no other command is specified at the top level. **Top-level positional args cannot be used with this**, as any provided
-  will be passed to the default command rather than being parsed by the top-level CLI. Top level flags, on the other hand, are allowed,
-  but their names must not conflict with the name of any flag of the default command.
+  will be passed to the default command rather than being parsed by the top-level CLI. Top-level flags, on the other hand, are allowed,
+  but their names must not conflict with the name of any flag of the default command or they will be overridden.
 
 Methods:
 - `flag` (decorator):  
@@ -209,30 +209,36 @@ Methods:
         output will appear in its parent's.
     - `aliases` (`tuple`): Alternative names with which this command can be invoked.
     - `from_cli` (`CLI`): If given, creates a command instance from an existing top-level CLI or command and binds it to this top-level CLI or command.
-- `remove`:
+- `remove`:  
     Removes an entity from the CLI, be it an arg, flag, or command.
 
     `cli.remove(name)`
 
     []()
     - `name` (`str`, `Entity`): Name of arg to remove. If passed an Entity instance, uses its name instead.
-- `parse`:
+- `parse`:  
     Applies cli's args/flags/commands/groups/clumps to its given input.
 
-    `cli.parse(inp=sys.argv[1:], *, systemexit=None, strict=False, require_main=False, ignore_pkgs=None)`
+    `cli.parse(inp=None, *, systemexit=None, strict=False)`
 
     []()
-    - `inp` (`str`, `list`): Input to parse args of. Converted using `shlex.split()` if given as a string.
+    - `inp` (`str`, `list`): Input to parse args of. Converted using `shlex.split()` if given as a string. If `None`/not given,
+      defaults to `sys.argv[1:]`.
     - `systemexit`: If not None, overrides the CLI-level `systemexit` attribute. Has the same meaning, then, as `CLI.systemexit`.
     - `strict`: If `True`, parses in "strict mode": Unknown flags will cause an error rather than be ignored, and a bad amount
       of arguments (too few/too many) will do the same.
-    - `require_main` (`bool`, `int`): If set, *only* executes the parse if the module it's being used from is `__main__`, determined
-      by peeking up the stack. This can optionally be an integer instead of a boolean `True`, in which case it represents the amount of
-      stack frames (relative to the ergo module itself) to cover before checking that its `__name__` equals `'__main__'` (anything related
-      to the importlib stack is ignored). Hence, if this is `True` or `1` then the module importing ergo will be checked; if it is `2` then
-      the module importing that module will be checked; and so on.
-    - `ignore_pkgs` (`tuple`): Tuple of package-name prefixes to ignore when counting stack frames for `require_main`. If `None`, will
-      ignore packages whose names start with `'importlib'` or `'pkg_resources'` (a.k.a. default behavior).
+- `prepare`:  
+    Once used, `cli.result` will hold the return value of `cli.parse()` rather than `cli.defaults`. See [Workflow](#workflow) for more info.
+    
+    `cli.prepare(*args, **kwargs)`  
+    *\*args, \*\*kwargs are passed to `CLI.parse()`.*
+
+    []()
+- `result` *(property)*:  
+    Returns `cli.defaults` until `cli.prepare()` is used, thereafter returning the result of `cli.parse()` (as it had been called with the
+    arguments passed to `prepare()`). Again, see [Workflow](#workflow) for further info.
+- `defaults` *(property)*:  
+    Returns the values of the `default=...` kwargs set from `cli.flag` and `cli.arg` as an `ErgoNamespace` object.
 - `__setattr__`:  
     CLI objects have `__setattr__` overridden to facilitate the creation of "groups", which apply their clump settings to themselves
     as a whole rather than each of their members individually. Entities can also be clumped within groups.
@@ -244,7 +250,6 @@ Methods:
 
     After the creation of a group, its methods such as `clump` (for internal clumping) can be accessed as `@cli.group_name_here.clump()`;
     others are `arg`, `flag`, and `command`.
-
 
 ### Callbacks
 `CLI.flag` and `CLI.arg` decorate functions; these functions are subsequently called when their flag/arg's name is detected during parsing.
@@ -318,8 +323,60 @@ If this callback were invoked as...
 - `--addition 1`: would return `1`
 - `--addition`: would return `4` (default argument)
 
-### Simple CLI
+### Workflow
+In a small script without many files, particularly one that's only meant to be run as a command-line script and not used as a Python module, it suffices to
+simply define `cli = ergo.CLI(...)` within it and then call `args = cli.parse()` to make use of its result.
 
+However, in a larger application that's to be distributed as both a CLI script and an importable Python module (or, worse, one that started out as only
+the former and had to be expanded into an importable module later on), which may comprise individual Python files that all depend on various CLI parameters
+when used from the command line but should function independently when imported... the whole process gets a bit trickier.  
+If the CLI is defined and its parse result computed all in the same file which other application files depend on, the module may error out when it's imported
+for other purposes (i.e. as something other than a command-line application) because it will try to parse sys.argv as normal and will likely find that it is
+in some way invalid -- not knowing that it's supposed to be acting as a Python module which doesn't care about sys.argv rather than as a command-line program.
+
+The following structure can in this case be used:
+
+```py
+# cli.py
+from ergo import CLI
+
+cli = CLI('Demo')
+
+@cli.flag(default='default value')
+def important_value():
+    return 'foo'
+
+...
+```
+```py
+# Main file, command-line entry point
+from modulename.cli import cli
+
+...
+
+def main():
+    cli.prepare()  # Including appropriate cli.parse() args (i.e. inp/strict/systemexit)
+    do_something_with(cli.result.important_value)
+
+if __name__ == '__main__':
+    main()
+```
+```py
+# Any other file
+from modulename.cli import cli
+
+def bar():
+    do_something_with(cli.result.important_value)
+
+...
+```
+
+`cli.result` will return a namespace consisting only of the default values *until* `cli.prepare()` is called, after which point `cli.result` will contain the result of
+a `cli.parse()` call with the arguments passed to `cli.prepare()`. This way (specifically, hiding the `cli.prepare()` call in a command-line-entry-point function) the
+application will only act as a CLI program if invoked from the command line, because otherwise `cli.prepare()` and in turn `cli.parse()` will never be called so the files
+that need certain CLI values can simply go on using the defaults.
+
+### Simple CLI
 As an alternative to the full `ergo.CLI` parser, one may use (as mentioned above) a reduced form of it, dubbed `ergo.simple`. It works as follows:
 
 ```py
