@@ -228,12 +228,12 @@ class _Handler:
               )
         
         err_details = {
+          'parsed': parsed,
+          'groups': groups,
+          'handler': repr(self),
           'AND_SUC': elim['AND'],
           'OR_SUC': elim['OR'],
           'XOR_SUC': elim['XOR'],
-          'parsed': parsed,
-          'groups': groups,
-          'handler': repr(self)
           }
         
         for all_failed, received in self._and.failures(parsed):
@@ -327,8 +327,7 @@ class _Handler:
                 self._defaults[entity.identifier] = default
             if required:
                 self._required.add(entity.name)
-            for alias in aliases:
-                self._aliases[alias] = entity.name
+            self._aliases.update({alias: entity.name for alias in aliases})
             self.flags[entity.name] = entity
             return entity
         return inner
@@ -339,10 +338,9 @@ class _Handler:
         else:
             subcmd = Command.from_cli(from_cli, self, name)
         visual_name = name.replace('_', _)
-        for alias in aliases:
-            self._aliases[alias] = visual_name
-        self._clump(subcmd, AND, OR, XOR)
+        self._aliases.update({alias: visual_name for alias in aliases})
         self.commands[visual_name] = subcmd
+        self._clump(subcmd, AND, OR, XOR)
         return subcmd
 
 
@@ -357,12 +355,10 @@ class ParserBase(_Handler, HelperMixin):
         self._groups = set()
         self._prepared_parse = None
         self._result = None
-        
         if not flag_prefix:
             raise ValueError('Flag prefix cannot be empty')
         if not no_help:
-            self.flag(
-              'help',
+            self.flag('help',
               help="Prints help and exits\nIf given a valid NAME, displays that entity's help"
               )(lambda name=None: self.cli_help(name))
     
@@ -518,12 +514,13 @@ class ParserBase(_Handler, HelperMixin):
             if too_many_args:
                 raise TypeError('Too many positional arguments (expected {}, got {})'.format(
                   len(self.args), len(args)
-                ))
+                  ))
             if unknown_flags:
                 raise TypeError('Unknown flag(s)' + ' '.join(starmap("`{}{}'".format, unknown_flags)))
         elif command is None:
-            unknown_flags = {i[2] for i in unknown_flags}
-            inp[:] = [v for i, v in enumerate(inp) if i not in unknown_flags]
+            unknown_idxes = {i[2] for i in unknown_flags}
+            # We want to pass unknowns to the default command because they probably belong to it
+            inp[:] = [v for i, v in enumerate(inp) if i in unknown_idxes or not v.startswith(self.flag_prefix)]
         
         return flags, args, command
     
@@ -532,49 +529,51 @@ class ParserBase(_Handler, HelperMixin):
         namespaces = {}
         flags, positionals, command = self._extract_flargs(inp, strict)
         prep = partial(self._put_nsp, namespaces)
+
+        cli_default_command = self._aliases.get(self.default_command, self.default_command)
+        default_command_cond = self.default_command is not None and command is None
         
         for flag, args in flags:
             if self.hasflag(flag):
                 entity = self.getflag(flag)
                 parsed[entity.identifier] = prep(entity)(*args)
         
-        if self.default_command is not None and command is None:
-            command = self._aliases.get(self.default_command, self.default_command)
+        if default_command_cond:
+            cmd_obj = self.getcmd(cli_default_command)
             try:
-                parsed[command] = self.getcmd(command).do_parse(inp, strict, systemexit)
+                parsed[cli_default_command] = cmd_obj.do_parse(inp, strict, systemexit)
             except Exception as e:
-                if systemexit is None and self.getcmd(command).systemexit or systemexit:
-                    self.getcmd(command).error(e, help=False)
+                if systemexit is None and cmd_obj.systemexit or systemexit:
+                    cmd_obj.error(e, help=False)
                 raise
-            return ErgoNamespace(**self._defaults, **parsed)._.set_default_key(self.default_command)
-        
-        if self._last_arg_consumes and len(positionals) > len(self.args):
-            zipped_args = zip_longest(map(self.getarg, self.args), positionals, fillvalue=self.getarg(self.args[-1]))
+            final = {**self._defaults, **parsed}
         else:
-            zipped_args = zip(map(self.getarg, self.args), positionals)
+            if self._last_arg_consumes and len(positionals) > len(self.args):
+                zipped_args = zip_longest(map(self.getarg, self.args), positionals, fillvalue=self.getarg(self.args[-1]))
+            else:
+                zipped_args = zip(map(self.getarg, self.args), positionals)
+            
+            for entity, value in zipped_args:
+                parsed[entity.identifier] = prep(entity)(value)
+            
+            if command is not None:
+                value, idx = command
+                command, cmd_obj = self._aliases.get(value, value), self.getcmd(value)
+                try:
+                    parsed[command] = cmd_obj.do_parse(inp[idx:], strict, systemexit)
+                except Exception as e:
+                    if systemexit is None and cmd_obj.systemexit or systemexit:
+                        cmd_obj.error(e, help=False)
+                    raise
+            self.enforce_clumps(parsed)
+            final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
         
-        for entity, value in zipped_args:
-            parsed[entity.identifier] = prep(entity)(value)
-        
-        if command is not None:
-            value, idx = command
-            try:
-                parsed[self._aliases.get(value, value)] = self.getcmd(value).do_parse(inp[idx:], strict, systemexit)
-            except Exception as e:
-                if systemexit is None and self.getcmd(value).systemexit or systemexit:
-                    self.getcmd(value).error(e, help=False)
-                raise
-        
-        self.enforce_clumps(parsed)
-        final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
-        nsp = ErgoNamespace(**final)
-        
+        nsp = ErgoNamespace(**final)._.set_default_key(cli_default_command if default_command_cond or command == cli_default_command else None)
         if self._required.difference(nsp):
             raise errors.RequirementError('Expected the following required arguments: {}\nGot {}'.format(
               ', '.join(map(repr, self._required)),
               ', '.join(map(repr, self._required.intersection(nsp))) or 'none'
-              )
-            )
+              ))
         return nsp
     
     def parse(self, inp=None, *, systemexit=None, strict=False):
