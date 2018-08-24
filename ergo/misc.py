@@ -1,6 +1,6 @@
 import inspect
 from ast import literal_eval
-from functools import wraps
+from functools import wraps, partial
 from itertools import starmap
 from types import SimpleNamespace
 
@@ -124,28 +124,26 @@ class auto:
 class multiton:
     classes = {}
     
-    def __init__(self, pos=None, *, kw=False, cls=None, hashify=None):
+    def __init__(self, pos=None, *, kw=False, cls=None, hash_by=None):
         self.class_ = cls
         self.kw = kw
         self.pos = pos
-        self.hashify = hashify
+        self.hash_func = hash_by
     
     def __call__(self, deco_cls):
         cls = self.class_ or deco_cls
-        if cls not in self.classes:
-            self.classes[cls] = {}
-        instances = self.classes[cls]
+        instances = self.classes.setdefault(cls, {})
         
-        @wraps(deco_cls)
-        def getinstance(*args, **kwargs):
+        def get_instance(*args, **kwargs):
             key = (args[:self.pos], kwargs) if self.kw else args[:self.pos]
-            if self.hashify is not None:
-                key = tuple(map(self.hashify, key))
+            if self.hash_func is not None:
+                key = tuple(map(self.hash_func, key))
             if key not in instances:
                 instances[key] = deco_cls(*args, **kwargs)
             return instances[key]
-        getinstance.cls = deco_cls
-        return getinstance
+        
+        get_instance.cls = deco_cls
+        return get_instance
 
 
 class ErgoNamespace(SimpleNamespace):
@@ -167,15 +165,12 @@ class ErgoNamespace(SimpleNamespace):
     def __iter__(self):
         yield from vars(self)
     
-    def __repr__(self):
-        return super().__repr__() + (self._.default or '')
-    
     @property
     def _(self):
         return _SubNamespace(self)
 
 
-@multiton(hashify=id)
+@multiton(hash_by=id)
 class _SubNamespace:
     def __init__(self, parent):
         self._parent = parent
@@ -185,26 +180,9 @@ class _SubNamespace:
         self.values = parent_dict.values
         self.get = parent_dict.get
         
+        # These used to be overridable due to the whole 'default key' thing
         self._getitem_ = parent.__getattribute__
         self._contains_ = parent_dict.__contains__
-        self.default = None
-    
-    def set_default_key(self, default_key):
-        if default_key is None or default_key not in self._parent:
-            self.default = None
-            return self._parent
-        default = self.get(default_key)
-        if not isinstance(default, SimpleNamespace):
-            self.default = None
-            raise TypeError('Default key must be a namespace')
-        def _getitem_(self, name):
-            return default[name]
-        def _contains_(self, name):
-            return hasattr(default, name) or hasattr(self, name)
-        self._getitem_ = _getitem_.__get__(self._parent)
-        self._contains_ = _contains_.__get__(self._parent)
-        self.default = '._.set_default({!r})'.format(default_key)
-        return self._parent
     
     def pretty(self, sep='\n', delim=': '):
         return sep.join(

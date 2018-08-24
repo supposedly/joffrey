@@ -20,20 +20,14 @@ _FILE = os.path.basename(sys.argv[0])
 class HelperMixin:
     @property
     def all_commands(self):
-        if getattr(self, 'default_command', None) is not None:
-            return ({*self.commands, *(name for g in self._groups for name in g.commands)} - {self.default_command}) | self.getcmd(self.default_command).all_commands
         return {*self.commands, *(name for g in self._groups for name in g.commands)}
     
     @property
     def all_flags(self):
-        if getattr(self, 'default_command', None) is not None:
-            return (*self.flags.values(), *self.getcmd(self.default_command).all_flags)
         return self.flags.values()
     
     @property
     def all_args(self):
-        if getattr(self, 'default_command', None) is not None:
-            return self.getcmd(self.default_command).all_args
         return map(self.getarg, self.args)
     
     @property
@@ -151,10 +145,12 @@ class _Handler:
         return self._aliases.get(name, name)
     
     def remove(self, obj):
-        name = obj.identifier if isinstance(obj, Entity.cls) else obj
+        name = obj.identifier if isinstance(obj, Entity.cls) else self.dealias(obj)
         if name in self.arg_map:
+            if self._last_arg_consumes:
+                self._last_arg_consumes = self.arg_map[name].repcount is not Ellipsis
+            self.args = list(filter(name.__ne__, self.args))
             del self.arg_map[name]
-            self.args = list(filter(name.__eq__, self.args))
         else:
             try:
                 del next(filter(lambda c: name in c, (self.commands, self.flags)))[name]
@@ -174,7 +170,7 @@ class _Handler:
         try:
             return self.arg_map[name]
         except KeyError:
-            return self._aliases[self.arg_map[name]]
+            return self.arg_map[self._aliases[name]]
     
     def getflag(self, name):
         try:
@@ -189,13 +185,13 @@ class _Handler:
             return self.commands[self._aliases[name]]
     
     def hasflag(self, name):
-        return name in self.flags or self._aliases.get(name, _Null) in self.flags
+        return self.dealias(name) in self.flags
     
     def hascmd(self, name):
-        return name in self.commands or self._aliases.get(name, _Null) in self.commands
+        return self.dealias(name) in self.commands
     
     def hasany(self, name):
-        return self.hasflag(name) or self.hascmd(name) or name in self.arg_map or self._aliases.get(name, _Null) in self.arg_map
+        return self.hasflag(name) or self.hascmd(name) or self.dealias(name) in self.arg_map
     
     def _clump(self, obj, AND, OR, XOR):
         if AND is not _Null:
@@ -345,12 +341,11 @@ class _Handler:
 
 
 class ParserBase(_Handler, HelperMixin):
-    def __init__(self, desc='', flag_prefix='-', *, systemexit=True, no_help=False, default_command=None):
+    def __init__(self, desc='', flag_prefix='-', *, systemexit=True, no_help=False):
         super().__init__()
         self.desc = desc
         self.flag_prefix = flag_prefix
         self.long_prefix = 2 * flag_prefix
-        self.default_command = default_command
         self.systemexit = systemexit
         self._groups = set()
         self._prepared_parse = None
@@ -379,7 +374,7 @@ class ParserBase(_Handler, HelperMixin):
     
     @property
     def defaults(self):
-        return super().defaults._.set_default_key(self.default_command)
+        return super().defaults
     
     @property
     def result(self):
@@ -454,7 +449,10 @@ class ParserBase(_Handler, HelperMixin):
             )
           )
     
-    def _extract_flargs(self, inp, strict=False):
+    def _skip_check(self, value):
+        return value.startswith(self.flag_prefix) or value == '--'
+    
+    def _extract_flargs(self, inp, strict=False, propagate_unknowns=False):
         flags = []
         args = []
         skip = 0
@@ -463,7 +461,7 @@ class ParserBase(_Handler, HelperMixin):
         
         too_many_args = False
         unknown_flags = []
-
+        
         for idx, value in enumerate(inp, 1):
             if skip > 0:
                 skip -= 1
@@ -478,112 +476,112 @@ class ParserBase(_Handler, HelperMixin):
                     command = (value, idx)
                     break
                 args.append(value)
-                if strict and len(args) > len(self.args):
+                if not self._last_arg_consumes and len(args) > len(self.args):
                     too_many_args = True
             elif allow_flags:
                 if '=' in value:
                     name, arg = value.lstrip(self.flag_prefix).split('=', 1)
                     if self.hasflag(name):
                         flags.append((self.dealias(name), [arg] if arg else []))
-                    elif strict:
-                        unknown_flags.append(('', value.split('=')[0], idx))
+                    elif propagate_unknowns:
+                        unknown_flags.append(('', value.split('=')[0], [arg] if arg else []))
+                    else:
+                        unknown_flags.append(('', value.split('=')[0]))
                     continue
                 
                 if value.startswith(self.long_prefix):
                     if self.hasflag(value.lstrip(self.flag_prefix)):  # long
                         skip = self.getflag(value.lstrip(self.flag_prefix)).argcount
-                        next_pos = next((i for i, v in enumerate(inp[idx:]) if v.startswith(self.flag_prefix)), len(inp))
+                        next_pos = next((i for i, v in enumerate(inp[idx:]) if self._skip_check(v)), len(inp))
                         if next_pos < skip:
                             skip = next_pos
                         flags.append((self.dealias(value.lstrip(self.flag_prefix)), inp[idx:skip+idx]))
-                    elif strict:
-                        unknown_flags.append(('', value, idx))
+                    elif propagate_unknowns:
+                        # skip = next((i for i, v in enumerate(inp[idx:]) if self._skip_check(v)), len(inp))
+                        # unknown_flags.append(('', value, inp[idx:skip+idx]))
+                        unknown_flags.append(('', value, []))
+                    else:
+                        unknown_flags.append(('', value))
                     continue
                 
                 for name in value[1:]:  # short
                     if self.hasflag(name):
                         skip = self.getflag(name).argcount
-                        next_pos = next((i for i, v in enumerate(inp[idx:]) if v.startswith(self.flag_prefix)), len(inp))
+                        next_pos = next((i for i, v in enumerate(inp[idx:]) if self._skip_check(v)), len(inp))
                         if next_pos < skip:
                             skip = next_pos
                         flags.append((self.dealias(name), inp[idx:skip+idx]))
-                    elif strict:
-                        unknown_flags.append((value[0], name, idx))
+                    elif propagate_unknowns:
+                        # skip = next((i for i, v in enumerate(inp[idx:]) if self._skip_check(v)), len(inp))
+                        # unknown_flags.append((value[0], name, inp[idx:skip+idx]))
+                        unknown_flags.append((value[0], name, []))
+                    else:
+                        unknown_flags.append((value[0], name))
         
-        if self.default_command is None:
+        if strict:
             if too_many_args:
                 raise TypeError('Too many positional arguments (expected {}, got {})'.format(
                   len(self.args), len(args)
                   ))
-            if unknown_flags:
-                raise TypeError('Unknown flag(s)' + ' '.join(starmap("`{}{}'".format, unknown_flags)))
-        elif command is None:
-            unknown_idxes = {i[2] for i in unknown_flags}
-            # We want to pass unknowns to the default command because they probably belong to it
-            inp[:] = [v for i, v in enumerate(inp) if i in unknown_idxes or not v.startswith(self.flag_prefix)]
-        
-        return flags, args, command
+            if unknown_flags and not propagate_unknowns:
+                raise TypeError('Unknown flag(s): ' + ' '.join(starmap("`{}{}'".format, unknown_flags)))
+        return flags, args, command, unknown_flags if propagate_unknowns else set()
     
-    def do_parse(self, inp=None, strict=False, systemexit=True):
+    def do_parse(self, inp=None, strict=False, systemexit=True, propagate_unknowns=False):
         parsed = {}
         namespaces = {}
-        flags, positionals, command = self._extract_flargs(inp, strict)
+        flags, positionals, command, unknown_flags = self._extract_flargs(inp, strict, propagate_unknowns)
         prep = partial(self._put_nsp, namespaces)
-
-        cli_default_command = self._aliases.get(self.default_command, self.default_command)
-        default_command_cond = self.default_command is not None and command is None
         
         for flag, args in flags:
             if self.hasflag(flag):
                 entity = self.getflag(flag)
                 parsed[entity.identifier] = prep(entity)(*args)
         
-        if default_command_cond:
-            cmd_obj = self.getcmd(cli_default_command)
+        if self._last_arg_consumes and len(positionals) > len(self.args):
+            zipped_args = zip_longest(map(self.getarg, self.args), positionals, fillvalue=self.getarg(self.args[-1]))
+        else:
+            zipped_args = zip(map(self.getarg, self.args), positionals)
+        
+        for entity, value in zipped_args:
+            parsed[entity.identifier] = prep(entity)(value)
+        
+        if command is not None:
+            value, idx = command
+            command, cmd_obj = self._aliases.get(value, value), self.getcmd(value)
             try:
-                parsed[cli_default_command] = cmd_obj.do_parse(inp, strict, systemexit)
+                parsed[command], cmd_unknown_flags = cmd_obj.do_parse(inp[idx:], strict, systemexit, propagate_unknowns)
             except Exception as e:
                 if systemexit is None and cmd_obj.systemexit or systemexit:
                     cmd_obj.error(e, help=False)
                 raise
-            final = {**self._defaults, **parsed}
-        else:
-            if self._last_arg_consumes and len(positionals) > len(self.args):
-                zipped_args = zip_longest(map(self.getarg, self.args), positionals, fillvalue=self.getarg(self.args[-1]))
             else:
-                zipped_args = zip(map(self.getarg, self.args), positionals)
-            
-            for entity, value in zipped_args:
-                parsed[entity.identifier] = prep(entity)(value)
-            
-            if command is not None:
-                value, idx = command
-                command, cmd_obj = self._aliases.get(value, value), self.getcmd(value)
-                try:
-                    parsed[command] = cmd_obj.do_parse(inp[idx:], strict, systemexit)
-                except Exception as e:
-                    if systemexit is None and cmd_obj.systemexit or systemexit:
-                        cmd_obj.error(e, help=False)
-                    raise
-            self.enforce_clumps(parsed)
-            final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
+                if propagate_unknowns:
+                    for name, args in ((flag.lstrip(self.flag_prefix), args) for _, flag, args in cmd_unknown_flags):
+                        if self.hasflag(name):
+                            entity = self.getflag(name)
+                            parsed[entity.identifier] = prep(entity)(*args)
+                        else:
+                            unknown_flags.add((None, name, args))
+        self.enforce_clumps(parsed)
+        final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
         
-        nsp = ErgoNamespace(**final)._.set_default_key(cli_default_command if default_command_cond or command == cli_default_command else None)
+        nsp = ErgoNamespace(**final)
         if self._required.difference(nsp):
             raise errors.RequirementError('Expected the following required arguments: {}\nGot {}'.format(
               ', '.join(map(repr, self._required)),
               ', '.join(map(repr, self._required.intersection(nsp))) or 'none'
               ))
-        return nsp
+        return nsp, unknown_flags
     
-    def parse(self, inp=None, *, systemexit=None, strict=False):
+    def parse(self, inp=None, *, systemexit=None, strict=False, propagate_unknowns=False):
         if inp is None:
             inp = sys.argv[1:]
         if isinstance(inp, str):
             inp = shlex.split(inp)
         
         try:
-            return self.do_parse(list(inp), strict, systemexit)  # == inp.copy()
+            nsp, _ = self.do_parse(list(inp), strict, systemexit, propagate_unknowns)  # list(inp) is effectively inp.copy()
         except Exception as e:
             if systemexit is None and self.systemexit or systemexit:
                 self.error(e, help=False)
@@ -591,6 +589,8 @@ class ParserBase(_Handler, HelperMixin):
         except SystemExit:
             if systemexit is None and self.systemexit or systemexit:
                 raise
+        else:
+            return nsp
     
     def prepare(self, *args, **kwargs):
         self._prepared_parse = partial(self.parse, *args, **kwargs)
@@ -670,17 +670,21 @@ class Command(SubHandler, ParserBase):
     def __str__(self):
         return ' {}'.format(self.name)
     
-    @property
-    def help(self):
-        return self.format_help()
-    
     @classmethod
     def from_cli(cls, cli, parent, name):
         obj = cls(cli.flag_prefix, parent=parent, name=name, desc=cli.desc)
         obj.__dict__.update(vars(cli))
         return obj
+    
+    @property
+    def help(self):
+        return self.format_help()
 
 
 class CLI(ParserBase):
     def __str__(self):  # for help screen; main CLI shouldn't show its own name
         return ''
+    
+    def _extract_flargs(self, *args, **kwargs):
+        kwargs['propagate_unknowns'] = False  # top-level CLI has nothing to bubble its unknowns up to
+        return super()._extract_flargs(*args[:-1], **kwargs)  # propagate_unknowns is the last pos arg for now
