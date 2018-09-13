@@ -82,16 +82,17 @@ class HelperMixin:
             print('No helpable entity named', repr(name))
             raise SystemExit
         
+        short = getattr(entity, 'short', '')
         try:
-            short = getattr(entity, 'short', '')
-            aliases = ', '.join(map(repr, (k for k, v in self._aliases.items() if v == name and k != short)))
+            aliases = ', '.join(map(repr, (k for k, v in self._aliases.items() if v == entity.name and k != short)))
         except AttributeError:
             aliases = ''
         
+        name = str(entity).lstrip()
         if aliases:
-            print('', entity, 'Aliases: {}\n'.format(aliases), entity.help, sep='\n', end='\n\n')
+            print('', name, 'aliases: {}'.format(aliases), entity.help, sep='\n')
         else:
-            print('', entity, entity.help, sep='\n', end='\n\n')
+            print('', name, entity.help, sep='\n')
         raise SystemExit
 
 
@@ -520,6 +521,12 @@ class ParserBase(_Handler, HelperMixin):
         
         if strict:
             if too_many_args:
+                if self.commands and not self.args:
+                    raise TypeError(
+                      'Expected a command: {}\n'
+                      'Try `--help <command name>` for specific detail'
+                      .format(', '.join(map(repr, self.commands)))
+                      )
                 raise TypeError('Too many positional arguments (expected {}, got {})'.format(
                   len(self.args), len(args)
                   ))
