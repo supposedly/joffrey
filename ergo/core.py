@@ -532,7 +532,7 @@ class ParserBase(_Handler, HelperMixin):
                   ))
             if unknown_flags and not propagate_unknowns:
                 raise TypeError('Unknown flag(s): ' + ' '.join(starmap("`{}{}'".format, unknown_flags)))
-        return flags, args, command, unknown_flags if propagate_unknowns else set()
+        return flags, args, command, unknown_flags if propagate_unknowns else []
     
     def do_parse(self, inp=None, strict=False, systemexit=True, propagate_unknowns=False):
         parsed = {}
@@ -569,7 +569,7 @@ class ParserBase(_Handler, HelperMixin):
                             entity = self.getflag(name)
                             parsed[entity.identifier] = prep(entity)(*args)
                         else:
-                            unknown_flags.add((None, name, args))
+                            unknown_flags.append((None, name, args))
         self.enforce_clumps(parsed)
         final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
         
