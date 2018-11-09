@@ -9,8 +9,8 @@ from functools import partial
 from itertools import chain, zip_longest, starmap
 
 from . import errors
-from .clumps import And, Or, Xor, ClumpGroup
-from .entity import Entity, Arg, Flag
+from .clumps import And, Or, Xor, ClumpSet
+from .entities import Entity, Arg, Flag
 from .misc import ErgoNamespace, _Null
 
 
@@ -18,6 +18,11 @@ _FILE = os.path.basename(sys.argv[0])
 
 
 class HelperMixin:
+    """
+    Provides help-screen functionality to Handlers.
+    A bit convoluted; needs reworking.
+    """
+    
     @property
     def all_commands(self):
         return {*self.commands, *(name for g in self._groups for name in g.commands)}
@@ -41,16 +46,19 @@ class HelperMixin:
     
     @property
     def help_info(self):
-        return '\n'.join(
-          '{}\n{}'.format(
-            label.upper(),
-            '\n'.join({
-              '\t{: <15} {}'.format(i.name, i.brief)
-              for i in getattr(self, 'all_' + label)
-            }),
+        return '{}\n{}'.format(
+          self._label_format('args'),
+          self._label_format('flags')
           )
-          for label in ('args', 'flags')
-        )
+    
+    def _label_format(self, label):
+        return '{}\n{}'.format(
+          label.upper(),
+          '\n'.join({
+            '\t{: <15} {}'.format(i.name, i.brief)
+            for i in getattr(self, 'all_' + label)
+            })
+          )
     
     def format_help(self, usage=True, commands=True, help=True):
         built = ['', self.desc, ''] if self.desc else ['']
@@ -58,9 +66,9 @@ class HelperMixin:
             built.append('usage: {}'.format(self.usage_info))
         if commands and self.commands:
             built.append('commands: {}'.format(', '.join(map(str, self.all_commands))))
-        if help and (usage or commands):
-            built.append('')
         if help:
+            if usage or commands:
+                built.append('')
             built.append(self.help_info)
         return '\n'.join(built)
     
@@ -74,7 +82,12 @@ class HelperMixin:
         raise SystemExit(exc if str(exc) else type(exc))
     
     def cli_help(self, name=None):
+        """
+        name: name of entity to provide help for
+        If no name given, provides general help
+        """
         if name is None:
+            # (this prints the help screen)
             self.error()
         
         entity = self.get(name)
@@ -97,6 +110,26 @@ class HelperMixin:
 
 
 class _Handler:
+    """
+    Base class for anything that 'handles' flags/args.
+
+    _aliases: Dict of {alias: entity's real name}
+    _defaults: Dict of {entity name: default value if not called}
+      which is used to fill in unprovided values after parsing
+    _last_arg_consumes: Whether the last provided positional argument
+      has a repeat count of "...", aka infinite
+    _and: AND clumps to take into account when parsing
+    _or: OR clumps
+    _xor: XOR clumps
+    _required: Set of all entities created with required=True
+      (for which to raise an error if not provided)
+    
+    arg_map: Dict of {arg name: ergo.entity.Arg object}
+    commands: Dict of {command name: ergo.core.Command object}
+    flags: Dict of {flag name: ergo.entity.Flag object}
+    args: List of positional arguments provided in the current run
+    """
+
     def __init__(self):
         self.arg_map = {}
         self.commands = {}
@@ -107,9 +140,9 @@ class _Handler:
         self.args = []
         self._last_arg_consumes = False
         
-        self._and = ClumpGroup()
-        self._or = ClumpGroup()
-        self._xor = ClumpGroup()
+        self._and = ClumpSet()
+        self._or = ClumpSet()
+        self._xor = ClumpSet()
         
         self._required = set()
     
@@ -124,10 +157,12 @@ class _Handler:
     
     @property
     def defaults(self):
+        # All subcommands would have a default value of their own defaults, hence the dict comp
         return ErgoNamespace(**self._defaults, **{cmd.name: cmd.defaults for cmd in self.commands.values()})
     
     @property
     def parent_and(self):
+        # These are defined differently in subclasses
         return self._and
     
     @property
@@ -140,7 +175,7 @@ class _Handler:
     
     @property
     def entity_names(self):
-        return set(chain(self.arg_map, self.commands, self.flags))
+        return {*self.arg_map, *self.commands, *self.flags}
     
     def dealias(self, name):
         return self._aliases.get(name, name)
@@ -149,17 +184,24 @@ class _Handler:
         name = obj.identifier if isinstance(obj, Entity.cls) else self.dealias(obj)
         if name in self.arg_map:
             if self._last_arg_consumes:
+                # If the entity being removed *is* the one that consumes, then
+                # _last_arg_consumes can no longer be True
                 self._last_arg_consumes = self.arg_map[name].repcount is not Ellipsis
-            self.args = list(filter(name.__ne__, self.args))
+            self.args = [n for n in self.args if n != name]
             del self.arg_map[name]
+        elif name in self.commands:
+            del self.commands[name]
+        elif name in self.flags:
+            del self.flags[name]
         else:
-            try:
-                del next(filter(lambda c: name in c, (self.commands, self.flags)))[name]
-            except StopIteration:
-                raise KeyError('No such entity: {}'.format(obj))
+            raise KeyError('No such entity: {}'.format(obj))
         self._aliases = {k: v for k, v in self._aliases.items() if v != name}
     
     def get(self, name):
+        """
+        Generic getter; use getarg/getflag/getcmd for specific type of entity
+        (analogous to hasany())
+        """
         for func in (self.getarg, self.getflag, self.getcmd):
             try:
                 return func(name)
@@ -192,9 +234,17 @@ class _Handler:
         return self.dealias(name) in self.commands
     
     def hasany(self, name):
+        # Analogous to get()
         return self.hasflag(name) or self.hascmd(name) or self.dealias(name) in self.arg_map
     
     def _clump(self, obj, AND, OR, XOR):
+        """
+        AND/OR/XOR: a clump's unique identifier
+        obj: Object to clump with any of the above
+        
+        Clump object will be grabbed according to
+        identifier, and obj will be added into it
+        """
         if AND is not _Null:
             self._and.add(And(AND, self))
             And(AND, self).add(obj)
@@ -206,29 +256,44 @@ class _Handler:
             Xor(XOR, self).add(obj)
     
     def enforce_clumps(self, parsed, groups=None):
-        elim = {lbl.upper(): getattr(self, 'parent_'+lbl).successes(parsed) for lbl in ('and', 'or', 'xor')}
-        if groups is not None:
-            g_clumps = {lbl: {groups.get(i) for i in set(successes).intersection(groups)} for lbl, successes in elim.items()}
-            zipped = {lbl: (elim[lbl], {name for g in groups for name in g.entity_names}) for lbl, groups in g_clumps.items()}
-            elim = {lbl: grp.union(success) for lbl, (success, grp) in zipped.items()}
+        """
+        parsed: Set of entities' names that were extracted from user input
+        groups: Clump-groups to take into account when checking
+        
+        Enforce AND/OR/XOR rules. Mostly the 'heart' of ergo.
+        """
+        
+        # Entities to eliminate for each clump
+        # (elimination means it was receieved as expected)
+        elim = {
+          'AND': self.parent_and.successes(parsed),
+          'OR': self.parent_or.successes(parsed),
+          'XOR': self.parent_xor.successes(parsed)
+          }
         
         def extract_names(collection):
-            if groups is None:
-                return map(repr, collection)
-            return (
-              '[{}]'.format(
-                ', '.join(map(repr, groups[n].entity_names))
-                )
-              if n in groups
-              else repr(n)
-              for n in collection
-              )
+            """
+            Only used if no groups were given to enforce_clumps()
+            (which means there's no nesting to take care of, which
+            in turn means a simple repr over everything will do)
+            """
+            return map(repr, collection)
+        
+        if groups is not None:
+            def extract_names(collection):
+                """[Visually group together] group's entity names"""
+                return (
+                  '[{}]'.format(', '.join(map(repr, groups[n].entity_names)))
+                  if n in groups else repr(n) for n in collection
+                  )
+            _g_clumps = {lbl: {groups.get(s) for s in successes.intersection(groups)} for lbl, successes in elim.items()}
+            elim = {lbl: elim[lbl] | {name for g in grps for name in g.entity_names} for lbl, grps in _g_clumps.items()}
         
         err_details = {
           'parsed': parsed,
           'groups': groups,
           'handler': repr(self),
-          'AND_SUC': elim['AND'],
+          'AND_SUC': elim['AND'],  # SUC = SUCCESSES
           'OR_SUC': elim['OR'],
           'XOR_SUC': elim['XOR'],
           }
@@ -281,6 +346,13 @@ class _Handler:
         return True
     
     def clump(self, *, AND=_Null, OR=_Null, XOR=_Null):
+        """
+        AND/OR/XOR: Identifiers for each clump
+        return: Wrapper function
+
+        Decorator that proxies _clump(), adding an entity
+        to the requested clumps
+        """
         def inner(cb):
             entity = Entity(cb.func if isinstance(cb, Entity.cls) else cb)
             self._clump(entity, AND, OR, XOR)
@@ -290,7 +362,12 @@ class _Handler:
     def arg(self, n=1, *, required=False, default=_Null, namespace=None, help=None):
         """
         n: number of times this arg should be received consecutively; ... for infinite
-        Expected kwargs: _ (str), help (str)
+        required: Whether this arg is required to be provided
+        default: Default value if this arg is not provided
+        namespace: Dict with which to initialize Arg entity's namespace (for storing state between repeated calls)
+        help: Help text for this arg (preferably None: defaults to function's __doc__)
+
+        Decorator that registers its decorated function as a positional argument
         """
         def inner(cb):
             repeat_count = n
@@ -307,7 +384,18 @@ class _Handler:
             return entity
         return inner
     
-    def flag(self, dest=None, short=_Null, *, aliases=(), default=_Null, required=False, namespace=None, help=None, _='-'):
+    def flag(self, dest=None, short=_Null, *, aliases=(), required=False, default=_Null, namespace=None, help=None, _='-'):
+        """
+        dest: What this flag's name should be in the final resultant ErgoNamespace
+        short: Shorthand alias for this flag; _Null => first available letter, None = no short alias
+        aliases: Other aliases for this flag
+        required: Whether this flag is required to be provided
+        default: Default value if this flag is not provided
+        namespace: Dict with which to initialize Flag entity's namespace (for storing state between repeated calls)
+        help: Help text for this flag (preferably None: defaults to function's __doc__)
+
+        Decorator that registers its decorated function as a flag/option
+        """
         def inner(cb):
             entity = Flag(cb, namespace=namespace, name=dest, help=help, _=_)
             # filter out '<lambda>'
@@ -330,6 +418,17 @@ class _Handler:
         return inner
     
     def command(self, name, desc='', *args, AND=_Null, OR=_Null, XOR=_Null, from_cli=None, aliases=(), _='-', **kwargs):
+        """
+        name: This command's name
+        desc: This command's helptext (a short description of it)
+        AND/OR/XOR: Clump values for this command as a whole
+        from_cli: If not None, ergo.core.CLI object to create this command from
+        aliases: Aliases for this command
+        _: What to replace underscores in this command's name with ((XXX: is that even applicable? commands aren't attrs))
+        *args, **kwargs: See Command.__init__()
+
+        Creates and returns a Command object that acts as a sub-command/sub-parser
+        """
         if from_cli is None:
             subcmd = Command(*args, **kwargs, name=name, desc=desc, parent=self)
         else:
@@ -342,7 +441,26 @@ class _Handler:
 
 
 class ParserBase(_Handler, HelperMixin):
+    """
+    Base class for Handlers that can parse arguments.
+
+    _groups: Clump-groups present in this parser
+    _prepared_parse: A functools.partial that is set once prepare() is called
+    _result: The result of _prepared_parse(), once called
+    
+    desc: Helptext (a short description of this parser)
+    flag_prefix: What to prefix shorthand flags with
+    long_prefix: flag_prefix*2, used to prefix long-form flags
+    systemexit: Whether to raise SystemExit on error or just fail w/ the original exception
+    """
+    
     def __init__(self, desc='', flag_prefix='-', *, systemexit=True, no_help=False):
+        """
+        desc: Helptext (a short description of this parser)
+        flag_prefix: What to prefix shorthand flags with (long prefix is this*2)
+        systemexit: Whether to raise SystemExit on error or just fail w/ the original exception
+        no_help: Whether NOT to create a default help command
+        """
         super().__init__()
         self.desc = desc
         self.flag_prefix = flag_prefix
@@ -359,6 +477,10 @@ class ParserBase(_Handler, HelperMixin):
               )(lambda name=None: self.cli_help(name))
     
     def __setattr__(self, name, val):
+        """
+        Special-cased for ergo.core.Group objects: re-initializes the
+        group as a SubHandler and adds it to self._groups
+        """
         if not isinstance(val, Group):
             return object.__setattr__(self, name, val)
         
@@ -379,6 +501,13 @@ class ParserBase(_Handler, HelperMixin):
     
     @property
     def result(self):
+        """
+        Returns the result of self._prepared_parse()
+        once that is set to not-None.
+        In the grand scheme of things, allows projects to be based
+        entirely around the CLI (by getting default-or-passed values
+        from cli.result).
+        """
         if self._prepared_parse is None:
             return self.defaults
         if self._result is None:
@@ -431,9 +560,13 @@ class ParserBase(_Handler, HelperMixin):
         return super().hascmd(name) or any(g.hascmd(name) for g in self._groups)
     
     def hasany(self, name):
+        # XXX: What reason does this have for not checking `g.hasany() for g in self._groups`?
+        # (is it intentional? I don't remember... my bad for not commenting as soon as I wrote it.)
         return super().hasany(name) or self._aliases.get(name, _Null) in self.arg_map
     
     def enforce_clumps(self, parsed):
+        # p is a set of `parsed` PLUS names of all groups that have entities in `parsed`
+        # because the group names are what this parser's and/or/xor clumps will be looking for
         p = set(parsed).union(next((g.name for g in self._groups if g.hasany(i)), None) for i in parsed) - {None}
         return (
           super().enforce_clumps(p, {g.name: g for g in self._groups})
@@ -442,6 +575,14 @@ class ParserBase(_Handler, HelperMixin):
           )
     
     def _put_nsp(self, namespaces, entity):
+        """
+        namespaces: dict of namespaces used in current parse session
+        entity: entity to pass a namespace to
+        return: Callable that provides entity with the appropriate namespace
+
+        Since namespaces are local to each parse-session, they can
+        be stored in a single dict (viz. namespaces) of {entity: nsp}.
+        """
         return entity if entity.namespace is None else partial(
           entity,
           namespaces.setdefault(
@@ -450,16 +591,35 @@ class ParserBase(_Handler, HelperMixin):
             )
           )
     
-    def _skip_check(self, value):
+    def _check_skip(self, value):
+        """
+        Check if this value ends a run of flag arguments
+        (i.e. if it's another flag or the end-of-flags sentinel)
+        """
         return value.startswith(self.flag_prefix) or value == '--'
     
     def _extract_flargs(self, inp, strict=False, propagate_unknowns=False):
+        """
+        inp: Input to parse
+        strict: Whether to disallow unknown flags / excessive positional args
+        propagate_unknowns: Whether unknown flags should be regarded as
+          an error or just bubbled up to parent handler
+        return: flags+args found, subcommand (if any), and unknown flags to propagate
+        
+        Extract flags/args from user input and return both.
+        """
+        # args/flags found so far
         flags = []
         args = []
+        # number of elements to skip (used when flag has multiple args)
         skip = 0
+        # subcommand, if any
         command = None
+        # start off assuming there can be flags in the input
+        # (changes if we hit a '--')
         allow_flags = True
         
+        # errors
         too_many_args = False
         unknown_flags = []
         
@@ -468,19 +628,24 @@ class ParserBase(_Handler, HelperMixin):
                 skip -= 1
                 continue
             
+            # "No flags beyond this point" sentinel
             if value == '--':
                 allow_flags = False
                 continue
             
             if (not allow_flags) or (not value.startswith(self.flag_prefix) or value in (self.flag_prefix, self.long_prefix)):
+                # Then value is a command or positional argument
                 if self.hascmd(value):
                     command = (value, idx)
+                    # Commands consume everything to their right, so no point parsing further
                     break
                 args.append(value)
+                # self._last_arg_consumes == infinite args allowed
                 if not self._last_arg_consumes and len(args) > len(self.args):
                     too_many_args = True
             elif allow_flags:
                 if '=' in value:
+                    # Then it's passing a single arg to the flag
                     name, arg = value.lstrip(self.flag_prefix).split('=', 1)
                     if self.hasflag(name):
                         flags.append((self.dealias(name), [arg] if arg else []))
@@ -491,30 +656,31 @@ class ParserBase(_Handler, HelperMixin):
                     continue
                 
                 if value.startswith(self.long_prefix):
-                    if self.hasflag(value.lstrip(self.flag_prefix)):  # long
-                        skip = self.getflag(value.lstrip(self.flag_prefix)).argcount
-                        next_pos = next((i for i, v in enumerate(inp[idx:]) if self._skip_check(v)), len(inp))
+                    name = value.lstrip(self.flag_prefix)
+                    if self.hasflag(name):  # long-form flag name
+                        skip = self.getflag(name).argcount
+                        next_pos = next((i for i, v in enumerate(inp[idx:]) if self._check_skip(v)), len(inp))
                         if next_pos < skip:
                             skip = next_pos
-                        flags.append((self.dealias(value.lstrip(self.flag_prefix)), inp[idx:skip+idx]))
+                        flags.append((self.dealias(name), inp[idx:skip+idx]))
                     elif propagate_unknowns:
-                        # skip = next((i for i, v in enumerate(inp[idx:]) if self._skip_check(v)), len(inp))
-                        # unknown_flags.append(('', value, inp[idx:skip+idx]))
+                        # Below is commented out because there's no way of knowing how many args the flag accepts
+                        # if it's not this parser's own
+                        #skip = next((i for i, v in enumerate(inp[idx:]) if self._check_skip(v)), len(inp))
+                        #unknown_flags.append(('', value, inp[idx:skip+idx]))
                         unknown_flags.append(('', value, []))
                     else:
                         unknown_flags.append(('', value))
                     continue
                 
-                for name in value[1:]:  # short
+                for name in value[1:]:  # collection of shorthand flag names (like '-xcvf')
                     if self.hasflag(name):
                         skip = self.getflag(name).argcount
-                        next_pos = next((i for i, v in enumerate(inp[idx:]) if self._skip_check(v)), len(inp))
+                        next_pos = next((i for i, v in enumerate(inp[idx:]) if self._check_skip(v)), len(inp))
                         if next_pos < skip:
                             skip = next_pos
                         flags.append((self.dealias(name), inp[idx:skip+idx]))
                     elif propagate_unknowns:
-                        # skip = next((i for i, v in enumerate(inp[idx:]) if self._skip_check(v)), len(inp))
-                        # unknown_flags.append((value[0], name, inp[idx:skip+idx]))
                         unknown_flags.append((value[0], name, []))
                     else:
                         unknown_flags.append((value[0], name))
@@ -535,9 +701,20 @@ class ParserBase(_Handler, HelperMixin):
         return flags, args, command, unknown_flags if propagate_unknowns else []
     
     def do_parse(self, inp=None, strict=False, systemexit=True, propagate_unknowns=False):
+        """
+        inp: List of command-line args to parse
+        strict: Whether to disallow excessive args and/or unknown non-propagable flags
+        systemexit: Whether to raise SystemExit on error or just fail with the original exception
+        propagate_unknowns: Whether to bubble up unknown flags to parent handler
+        return: Parsed-out ErgoNamespace from inp, unknown flags found
+        
+        Backend to parse() -- does the actual parsing and returns result + unknown flags to propagate
+        """
         parsed = {}
-        namespaces = {}
         flags, positionals, command, unknown_flags = self._extract_flargs(inp, strict, propagate_unknowns)
+        # Namespaces to be passed to entities in current run
+        # (nsps are parse-session-local)
+        namespaces = {}
         prep = partial(self._put_nsp, namespaces)
         
         for flag, args in flags:
@@ -546,6 +723,7 @@ class ParserBase(_Handler, HelperMixin):
                 parsed[entity.identifier] = prep(entity)(*args)
         
         if self._last_arg_consumes and len(positionals) > len(self.args):
+            # Fill zipped_args with the Arg that's meant to consume trailing values
             zipped_args = zip_longest(map(self.getarg, self.args), positionals, fillvalue=self.getarg(self.args[-1]))
         else:
             zipped_args = zip(map(self.getarg, self.args), positionals)
@@ -564,16 +742,20 @@ class ParserBase(_Handler, HelperMixin):
                 raise
             else:
                 if propagate_unknowns:
+                    # The _ is the flag's name, which would only have been used for error output
                     for name, args in ((flag.lstrip(self.flag_prefix), args) for _, flag, args in cmd_unknown_flags):
                         if self.hasflag(name):
                             entity = self.getflag(name)
                             parsed[entity.identifier] = prep(entity)(*args)
                         else:
+                            # Propagate yet further
                             unknown_flags.append((None, name, args))
         self.enforce_clumps(parsed)
+        # Place defaults first then override them with provided values
         final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
         
         nsp = ErgoNamespace(**final)
+        # One final check after enforce_clumps: all required entities must have been provided
         if self._required.difference(nsp):
             raise errors.RequirementError('Expected the following required arguments: {}\nGot {}'.format(
               ', '.join(map(repr, self._required)),
@@ -582,6 +764,15 @@ class ParserBase(_Handler, HelperMixin):
         return nsp, unknown_flags
     
     def parse(self, inp=None, *, systemexit=None, strict=False, propagate_unknowns=False):
+        """
+        inp: Input to parse, either as a string (which is then shlex.split) or a list of string arguments
+        systemexit: Whether to raise SystemExit on error or just fail with the original exception
+        strict: Whether to disallow excessive args and/or unknown non-propagable flags
+        propagate_unknowns: Whether to bubble up unknown flags to parent handler
+        return: Resultant ErgoNamespace from parse
+
+        Parses user input into an ErgoNamespace. If systemexit, prints usage info on error.
+        """
         if inp is None:
             inp = sys.argv[1:]
         if isinstance(inp, str):
@@ -600,10 +791,19 @@ class ParserBase(_Handler, HelperMixin):
             return nsp
     
     def prepare(self, *args, **kwargs):
+        """
+        *args, **kwargs: see parse().
+
+        Allows self.result to return an ErgoNamespace of actual
+        parsed values (not just defaults).
+        """
         self._prepared_parse = partial(self.parse, *args, **kwargs)
 
 
 class SubHandler(_Handler):
+    """
+    Base class for handlers that cannot parse, but are 'attached' to handlers that can.
+    """
     def __init__(self, parent, name):
         if not name:
             raise ValueError('Sub-handler name cannot be empty')
@@ -613,18 +813,25 @@ class SubHandler(_Handler):
     
     @property
     def parent_and(self):
-        return ClumpGroup(self._aliases.get(i, i) for i in chain(self._and, self.parent.parent_and))
+        return ClumpSet(self._aliases.get(i, i) for i in chain(self._and, self.parent.parent_and))
     
     @property
     def parent_or(self):
-        return ClumpGroup(self._aliases.get(i, i) for i in chain(self._or, self.parent.parent_or))
+        return ClumpSet(self._aliases.get(i, i) for i in chain(self._or, self.parent.parent_or))
     
     @property
     def parent_xor(self):
-        return ClumpGroup(self._aliases.get(i, i) for i in chain(self._xor, self.parent.parent_xor))
+        return ClumpSet(self._aliases.get(i, i) for i in chain(self._xor, self.parent.parent_xor))
 
 
 class Group(SubHandler):
+    """
+    Clump-group that hosts clumps within itself but can be itself passed to clumps whole.
+    Strange implementation to streamline group creation a little bit: __init__() only
+    sets up the shell of a Group, and nothing happens with the obj until it is assigned as
+    an attribute of a ParserBase object (which will then assign the group's name and set it
+    up to be an actual SubHandler and everything).
+    """
     def __init__(self, *, required=False, AND=_Null, OR=_Null, XOR=_Null):
         """
         CLI later calls `SubHandler.__init__(Group(), self, name)` in its __setattr__()
@@ -637,6 +844,8 @@ class Group(SubHandler):
     
     def arg(self, n=1, **kwargs):
         """
+        See _Handler.arg()
+        
         n: number of times this arg should be received consecutively; pass ... for infinite
         Expected kwargs: _ (str), help (str)
         """
@@ -649,6 +858,9 @@ class Group(SubHandler):
         return inner
     
     def flag(self, dest=None, short=_Null, **kwargs):
+        """
+        See _Handler.flag().
+        """
         def inner(cb):
             entity = Flag(cb, namespace=kwargs.get('namespace'), name=dest, help=kwargs.get('help'), _=kwargs.get('_', '-'))
             if dest is not None:
@@ -670,6 +882,9 @@ class Group(SubHandler):
 
 
 class Command(SubHandler, ParserBase):
+    """
+    Subcommand: attached to a parser but is also one in its own right.
+    """
     def __init__(self, flag_prefix='-', *, parent, name, desc):
         SubHandler.__init__(self, parent, name)
         ParserBase.__init__(self, desc, flag_prefix, systemexit=getattr(parent, 'systemexit', True))
@@ -679,6 +894,13 @@ class Command(SubHandler, ParserBase):
     
     @classmethod
     def from_cli(cls, cli, parent, name):
+        """
+        cli: ergo.core.CLI object to create command from
+        parent: ParserBase object to attach new command to
+        name: name of new command
+
+        Creates a command from a preexisting ParserBase object. Helps with extensibility.
+        """
         obj = cls(cli.flag_prefix, parent=parent, name=name, desc=cli.desc)
         obj.__dict__.update(vars(cli))
         return obj
@@ -689,9 +911,15 @@ class Command(SubHandler, ParserBase):
 
 
 class CLI(ParserBase):
-    def __str__(self):  # for help screen; main CLI shouldn't show its own name
+    """
+    The 'main dish', as phrased in the README.
+    This is what users import and base their ergo applications off of.
+    """
+    def __str__(self):  # for help screen (because main CLI shouldn't show its own name)
         return ''
     
     def _extract_flargs(self, *args, **kwargs):
-        kwargs['propagate_unknowns'] = False  # top-level CLI has nothing to bubble its unknowns up to
-        return super()._extract_flargs(*args[:-1], **kwargs)  # propagate_unknowns is the last pos arg for now
+        # Top-level CLI has nothing to bubble its unknowns up to
+        kwargs['propagate_unknowns'] = False
+        # Propagate_unknowns is the last pos arg for now, so we can do [:-1] to get rid of it
+        return super()._extract_flargs(*args[:-1], **kwargs)

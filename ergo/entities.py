@@ -10,7 +10,27 @@ VAR_POS = inspect.Parameter.VAR_POSITIONAL
 
 @multiton()
 class Entity:
+    """
+    Base class for flags/positional arguments.
+
+    ###  instance attrs  ###
+    _namespace: dict containing namespace-initialization values
+    _normalized_params: names of arguments this entity takes, formatted prettily
+    params: arguments this entity takes
+    argcount: how many args this entity can take
+    func: original function passed to __init__()
+    callback: func decorated with ergo.misc.typecast()
+    help: entity's helptext
+    identifier: custom name if __init__() was given one else func.__name__
+    name: identical to identifier but subclasses can override
+    """
     def __init__(self, func, *, name=None, namespace=None, help=None):
+        """
+        func: function this entity is to call
+        name: entity's name or func.__name__
+        namespace: dict with which to initialize a namespace if applicable
+        help: entity's help text or func.__doc__
+        """
         params = inspect.signature(func).parameters
         has_nsp = bool(namespace)
         first_optional = next((i for i, v in enumerate(params.values()) if v.default is not inspect._empty), sys.maxsize)
@@ -35,6 +55,7 @@ class Entity:
     
     @property
     def namespace(self):
+        # must deepcopy because users can modify the returned dict
         return deepcopy(self._namespace)
     
     def __call__(self, *args, **kwargs):
@@ -43,10 +64,18 @@ class Entity:
 
 @multiton(cls=Entity.cls)
 class Flag(Entity.cls):
+    """
+    A flag AKA option (the kind passed in unix with - and --)
+    name: identifier but with its underscores replaced by whatever given to __init__()
+    short: short alias
+    """
     def __init__(self, *args, _='-', **kwargs):
+        """
+        _: What to replace underscores with in self.name
+        """
         super().__init__(*args, **kwargs)
         self.name = self.identifier.replace('_', _)
-        self.short = None
+        self.short = None  # can be reassigned
     
     @property
     def args(self):
@@ -60,6 +89,11 @@ class Flag(Entity.cls):
 
 @multiton(cls=Entity.cls)
 class Arg(Entity.cls):
+    """
+    A positional argument
+    name: self.identifier
+    repcount: how many times this argument is to be consecutively invoked
+    """
     def __init__(self, cb, repeat_count, **kwargs):
         super().__init__(cb, **kwargs)
         self.name = self.identifier
