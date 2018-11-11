@@ -1,7 +1,7 @@
 import inspect
 from ast import literal_eval
-from functools import wraps, partial
-from itertools import starmap
+from functools import partial, wraps
+from itertools import islice, starmap
 from types import SimpleNamespace
 
 
@@ -28,7 +28,7 @@ def typecast(func):
     
     More specifically, calls func's annotations on arguments
     passed to it; non-callable annotations are not touched.
-    If a variadic argument (*, **) is annotated with a callable,
+    If a callable annotates a variadic argument (*, **),
     the annotation will be called on each value therein.
     """
     def _hint_for(param):
@@ -57,12 +57,17 @@ def typecast(func):
             func(*args, **kwargs)  # raise TypeError
         # Type-convert the positional arguments that were passed as such
         args_.extend(starmap(convert, zip(pos, arg_iter)))
-        # Fill in the rest with the default arguments defined on func
-        args_.extend(pos_defaults[len(args_):])
+        # Fill in the rest with either positional parameters passed as kwargs
+        # or, failing that, each parameter's default value
+        for param, hint, default in islice(zip(params, pos, pos_defaults), len(args_), None):
+            if param.name in kwargs:
+                args_.append(convert(hint, kwargs.pop(param.name)))
+            else:
+                args_.append(default)
         # If some positionals aren't present and also don't have defaults,
         if inspect._empty in args_:
-            # Then they were simply not passed...
-            # ...as positionals. They may have been passed via keyword:
+            # Then they were simply not passed as positionals,
+            # but they may have been passed via keyword:
             for idx, (param, hint, passed) in enumerate(zip(params, pos, args_)):
                 if passed is not inspect._empty:
                     # Only look at those for which nothing was passed
@@ -70,7 +75,7 @@ def typecast(func):
                 try:
                     args_[idx] = convert(hint, kwargs.pop(param.name))
                 except KeyError:
-                    # Then this parameter wasn't given, period -- which is an error
+                    # Then this parameter wasn't given, period
                     func(*args, **kwargs)  # raise TypeError
         # If func accepts *args and arg_iter has any values left in it, they
         # should be passed to *args

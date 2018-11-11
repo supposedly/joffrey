@@ -29,9 +29,15 @@ def auto2(one: auto(int, list, str), two: ~auto(int) = None):
     return one, two
 
 
+@ergo_misc.typecast  # just to test the one thing with default args
+def whatever(a, b=2):
+    return a, b
+
+
 def test_normal_typecast(parse):
     assert parse('-s 1 2').standard == (1, list('2'))
     assert parse('-s 22 abc').standard == (22, list('abc'))
+    assert whatever(1, b=3) == (1, 3)
     with pytest.raises(ValueError):
         parse('-s not-an-integer a')
     with pytest.raises(TypeError):
