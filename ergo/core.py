@@ -329,10 +329,10 @@ class _Handler:
         for all_failed, not_received in self._xor.failures(parsed):
             # XOR failure == member of an XOR clump that was given alongside at least one other
             # an XOR failure is okay if it satisfies an AND clump (i.e. all other ANDs in its clump were given)
-            ####################################################################################
-            # XXX: SHOULD it be okay if it satisfies an OR clump? What about if it's required? #
-            # That is: should this actually say `- elim['AND'] - elim['OR'] - self._required`? #
-            ####################################################################################
+            ######################################################################################
+            #  XXX: SHOULD it be okay if it satisfies an OR clump? What about if it's required?  #
+            #  That is: should this actually say `- elim['AND'] - elim['OR'] - self._required`?  #
+            ######################################################################################
             not_exempt = (all_failed - not_received) - elim['AND']
             if len(not_exempt) > 1:
                 raise errors.XORError(
@@ -793,11 +793,29 @@ class ParserBase(_Handler, HelperMixin):
     def prepare(self, *args, **kwargs):
         """
         *args, **kwargs: see parse().
-
-        Allows self.result to return an ErgoNamespace of actual
+        return: self
+        
+        Makes self.result return an ErgoNamespace of actual
         parsed values (not just defaults).
+        Returns self to allow a `prepare()` call to be chained
+        into `set_defaults()` and/or `result`.
         """
         self._prepared_parse = partial(self.parse, *args, **kwargs)
+        return self
+    
+    def set_defaults(self, **kwargs):
+        """
+        **kwargs: names and values to insert into self._defaults
+
+        Ensures that each name in kwargs is already present.
+        Returns self to allow a `set_defaults()` call to be chained
+        into `result` or `prepare()`.
+        """
+        for name in kwargs:
+            if not self.hasany(name):
+                raise KeyError('Unknown name {} passed to set_defaults()'.format(name))
+        self._defaults.update(kwargs)
+        return self
 
 
 class SubHandler(_Handler):
@@ -872,7 +890,7 @@ class Group(SubHandler):
                     pass
                 else:
                     self._aliases[entity.short] = entity.name
-            if kwargs.get('default', _Null) is not _Null:  # could be `'default' not in ...` but we don't want them using _Null either
+            if kwargs.get('default', _Null) is not _Null:  # could be `'default' not in kwargs` but we don't want them using _Null either
                 self._defaults[entity.identifier] = kwargs['default']
             if kwargs.get('required'):
                 self._required.add(entity.name)
