@@ -399,7 +399,7 @@ class _Handler:
         def inner(cb):
             entity = Flag(cb, namespace=namespace, name=dest, help=help, _=_)
             # filter out '<lambda>'
-            if cb.__name__.isidentifier() and dest is not None:
+            if cb.__name__.isidentifier():
                 self._aliases[cb.__name__] = entity.name
             if short is not None:  # _Null == default; None == none
                 try:
@@ -435,6 +435,7 @@ class _Handler:
             subcmd = Command.from_cli(from_cli, self, name)
         visual_name = name.replace('_', _)
         self._aliases.update({alias: visual_name for alias in aliases})
+        self._aliases[name] = visual_name
         self.commands[visual_name] = subcmd
         self._clump(subcmd, AND, OR, XOR)
         return subcmd
@@ -881,7 +882,7 @@ class Group(SubHandler):
         """
         def inner(cb):
             entity = Flag(cb, namespace=kwargs.get('namespace'), name=dest, help=kwargs.get('help'), _=kwargs.get('_', '-'))
-            if dest is not None:
+            if cb.__name__.isidentifier():
                 self._aliases[cb.__name__] = entity.name
             if short is not None:  # _Null == default; None == none
                 try:
