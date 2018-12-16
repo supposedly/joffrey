@@ -41,13 +41,9 @@ found [argh](https://argh.readthedocs.io/en/latest/index.html), which despite no
 to (by pure coincidence) share a number of features with ergo -- but it's currently looking for maintainers and does
 depend on argparse underneath (which I'm trying my best to get away from), so I'd say we're good.
 
-Ergo, by the way, is still early in alpha. If it really doesn't solve the same problem for you that it does for me,
-I think you'd be better off trying something else; docopt, for example, is superb, and Fire's no-assembly-required
-philosophy is quite fun in its own right.  
-I also, in full disclosure, don't too much enjoy the design of a lot of current argparse-like solutions (really, most
-of them except docopt). As such, in addition to aiding in the creation of such interdependent systems as mentioned
-above, ergo's also my shot at making something that's just enjoyable to work with. Time will have to tell whether it
-succeeds!
+Ergo, by the way, is still an experiment. If it really doesn't solve the same problem for you that it does for me,
+I think you'd be better off trying something else -- [here's a list](https://gist.github.com/eltrhn/01224262b816df21b601ab0784d5f999)
+of alternatives to check out!
 
 [](#separator-for-pypi)
 
@@ -327,24 +323,53 @@ If this callback were invoked as...
 - `--addition`: would return `4` (default argument)
 
 ### Workflow
+Ergo allows your whole package to center in functionality around the CLI.  
+I don't quite know if this is good or bad design&nbsp;-- leaning toward "bad", perhaps, because I only
+needed it for a package that started as a CLI-only script and grew awkwardly into an importable
+module&nbsp;-- but it certainly works, and it hasn't been at all disagreeable IMHO.
+
 In a small script without many files, particularly one that's only meant to be run as a command-line script
-and not used as a Python module, it suffices to
-simply define `cli = ergo.CLI(...)` within it and make use thereof with something like `args = cli.parse()`.
+and not used as a Python module, it suffices to simply define `cli = ergo.CLI(...)` within it and make use
+thereof with something like `args = cli.parse()`.
 
-However, in a larger application distributed as both a CLI script and an importable Python module (or, worse, one that started out as only
-the former and had to be expanded into an importable module later on), which may comprise individual Python files that all depend on various CLI parameters
-when used from the command line but should function independently when imported... the whole process gets a bit trickier.  
-If the CLI is defined and its parse result computed all in the same file which other application files depend on, the module may error out when it's imported
-for other purposes (i.e. as something other than a command-line application) because it will try to parse sys.argv as normal and will likely find it to be
-in some way invalid -- not knowing that it's supposed to be acting as a Python module that doesn't care about sys.argv rather than as a command-line tool.
+However, in a larger package distributed both as a CLI script *and* an importable Python module, a problem
+arises: the module will start thinking it should read from the command line even if it's only being imported,
+leading to errors when it doesn't find in `sys.argv` what it thinks it needs to.
 
-The following structure can in this case be used:
+The obvious solution is to take advantage of `if __name__ == '__main__'`. But, after this, the question of
+what to do with the CLI part arises: either it can be separated, itself hooking into the module and compiling
+the command-line output itself, *or* things can go the other way around, with the module hooking into the CLI
+and making use of default values when none were given. Ergo allows the former, of course, but it also facilitates
+the latter.
+
+There are three parts to this functionality:
+
+- `cli.result`. This is a property of `ergo.CLI()` objects that, up until `cli.prepare()` is called, will only return
+  default values.
+- `cli.prepare()`. Prepraes this CLI to parse from the command line *rather than* use default values. This function
+  should only be called from the "main" entry point (keeping it untouched if the module is imported).
+- `cli.set_defaults()`. Changes the CLI's default values, but importantly: if only called from the "main" entry point, allows
+  segregation of "command-line defaults" from "module defaults", with the defaults set in this function being the former
+  and the defaults set via `@cli.command()` and `@cli.flag()` being the latter. This is useful, say, for implementation of
+  a `-q`/`--quiet` flag: when imported as a module ("module default") the `-q` flag should be set by default, but
+  when used from the command line the `-q` flag should only be set if the user does so (and should be unset as a default).
+
+The module as a whole can use `cli.result` to grab important values, and if `cli.prepare()` and `cli.set_defaults()` are used
+correctly, this structure will result in the module's behaving seamlessly regardless of whether it was imported or invoked
+directly from the command line.
+
+Here is an example:
+
 
 ```py
 # cli.py
 from ergo import CLI
 
 cli = CLI('Demo')
+
+@cli.flag(default=False)  # module default: when imported, this module should print nothing
+def quiet():
+    return True
 
 @cli.flag(default='default value')
 def important_value():
@@ -359,7 +384,9 @@ from modulename.cli import cli
 ...
 
 def main():
-    cli.prepare()  # Including appropriate cli.parse() args (i.e. inp/strict/systemexit)
+    cli.prepare()  # Including the desired cli.parse() args (i.e. inp/strict/systemexit)
+    # command-line default: when used from terminal, this module should print unless user says not to
+    cli.set_defaults(quiet=False)
     do_something_with(cli.result.important_value)
 
 if __name__ == '__main__':
@@ -370,17 +397,17 @@ if __name__ == '__main__':
 from modulename.cli import cli
 
 def bar():
+    # Will be none the wiser as to whether cli.result.important_value
+    # gives important_value's default or input from the command line
     do_something_with(cli.result.important_value)
 
 ...
 ```
 
-`cli.result` will return a namespace consisting solely of the default values *until* `cli.prepare()` is called, only after which it will contain the result of
-a call to `cli.parse()`. This way (specifically, by hiding the `cli.prepare()` call in a function that can only be entered from the command line), the
-application will not attempt to act as a CLI program unless invoked as one; `cli.prepare()` and in turn `cli.parse()` will never be called otherwise, so the other application files
-that need certain CLI values can simply continue using the defaults with no "missing command-line arguments" errors.
-
 ### Simple CLI
+
+_**NOTE: ergo.simple will be deprecated soon -- or, at the very least, demoted to "recipe" status.**_
+
 As an alternative to the full `ergo.CLI` parser, one may use (as mentioned above) a reduced form of it, dubbed `ergo.simple`. It works as follows:
 
 ```py
