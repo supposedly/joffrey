@@ -1,4 +1,4 @@
-from ergo import CLI
+from kizbra import CLI
 
 cli = CLI()
 cmd = cli.command('cmd')

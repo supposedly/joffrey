@@ -1,6 +1,6 @@
 import pytest
 
-from ergo import CLI
+from kizbra import CLI
 
 cli = CLI(systemexit=False)
 

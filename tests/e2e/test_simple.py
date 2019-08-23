@@ -1,10 +1,10 @@
 from textwrap import dedent
 
-import ergo
+import kizbra
 import pytest
 
 
-@ergo.simple
+@kizbra.simple
 def main(a: int, *b: list, c: set = None):
     return a, b, c
 
@@ -15,20 +15,20 @@ def FFF(one: str.upper, *, two: lambda x: tuple(map(int, x))):
     return one, two
 
 
-ergo.simple._ = '.'
-ergo.simple.short_flags = False
+kizbra.simple._ = '.'
+kizbra.simple.short_flags = False
 
 
-@ergo.simple
+@kizbra.simple
 def main2(*, asd_f):
     return asd_f
 
 
-ergo.simple._ = '-'
-ergo.simple.short_flags = True
+kizbra.simple._ = '-'
+kizbra.simple.short_flags = True
 
 
-@ergo.simple
+@kizbra.simple
 def segundo(positional, *consuming, flag):
     """Simple-CLI demo"""
     print('MAIN:', positional, consuming, flag)
@@ -48,7 +48,7 @@ def subcmd(*consuming: set, flag: str.lower):
     print('SUBCMD:', consuming, flag)
 
 
-ergo.simple.no_top_level()  # just so that part runs /shrug
+kizbra.simple.no_top_level()  # just so that part runs /shrug
 
 
 def test_simple():

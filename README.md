@@ -1,7 +1,7 @@
 # Yet Another Command-Line-Argument Parser
 
-[![Build Status](https://travis-ci.com/eltrhn/ergo.svg?branch=master)](https://travis-ci.com/eltrhn/ergo)
-[![codecov](https://codecov.io/gh/eltrhn/ergo/branch/master/graph/badge.svg)](https://codecov.io/gh/eltrhn/ergo)
+[![Build Status](https://travis-ci.com/supposedly/kizbra.svg?branch=master)](https://travis-ci.com/supposedly/kizbra)
+[![codecov](https://codecov.io/gh/supposedly/kizbra/branch/master/graph/badge.svg)](https://codecov.io/gh/supposedly/kizbra)
 
 I'm tired of working around argparse. This suits my needs a tad better; vaguely inspired by
 [discord.py](https://github.com/Rapptz/discord.py)'s brilliant
@@ -10,14 +10,15 @@ I'm tired of working around argparse. This suits my needs a tad better; vaguely 
 [](#separator-for-pypi)
 
 ```nginx
-pip install ergo
+pip install kizbra
 ```
 
 ## Contents
 
 1. [Why?](#why)
-2. [Examples](#examples)
-3. [Documentation](#documentation)
+2. [The name](#the-name)
+3. [Examples](#examples)
+4. [Documentation](#documentation)
     1. [CLI](#cli)
     2. [Callbacks](#callbacks)
     3. [Workflow](#workflow)
@@ -34,23 +35,34 @@ I feel like the lib should be able to handle this stuff itself, without your nee
 that these two flags aren't used at the same time as this arg"* or *"make sure all these things appear
 together, or alternatively that this second thing does"* to external functions or post-parsing if-statements.
 
-*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which did beat ergo
+*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which did beat kizbra
 to the idea of AND/OR/XOR clumps (by the names of "requires", "wants", and "conflicts"), albeit with a very different
 design philosophy overall; credit's due for (AFAIK) originating that concept, however! I also at about the same time
 found [argh](https://argh.readthedocs.io/en/latest/index.html), which despite not solving the clumping issue appears
-to (by pure coincidence) share a number of features with ergo -- but it's currently looking for maintainers and does
+to (by pure coincidence) share a number of features with kizbra -- but it's currently looking for maintainers and does
 depend on argparse underneath (which I'm trying my best to get away from), so I'd say we're good.
 
-Ergo, by the way, is still an experiment. If it really doesn't solve the same problem for you that it does for me,
+Kizbra, by the way, is still an experiment. If it really doesn't solve the same problem for you that it does for me,
 I think you'd be better off trying something else -- [here's a list](https://gist.github.com/eltrhn/01224262b816df21b601ab0784d5f999)
 of alternatives to check out!
+
+
+## The name
+Kizbra, or كزبرة, is the Lebanese Arabic name of Chinese parsley. **Pars**ley for parsing. (You may know the herb as
+coriander or cilantro instead. The Arabic name of 'actual' parsely, بقدونس, isn't so catchy when transliterated
+into English.)
+
+This project's original name was `ergo`, but the *only* reason it had this name was that it hadn't yet been taken on
+PyPI. I changed it to resolve a name conflict with another "ergo" project that I felt was more-deserving of the PyPI name.
+However, I've received some feedback that `kizbra` sounds awfully strange or even innuendo-y in an English context,
+so consider this only an intermediate name while I think of a better one ;)
 
 [](#separator-for-pypi)
 
 ## Examples
 
 ```py
-from ergo import CLI, Group
+from kizbra import CLI, Group
 
 cli = CLI('Quick demo program')
 # CLI.__setattr__() on Group objects is special-cased slightly
@@ -84,7 +96,7 @@ def add(a: int = 4, *b: int):  # can also provide default args and a type-coerci
 ```
 ```py
 >>> cli.parse('foo -S "test test" -vvvv')  # input will be shlex.split if given as a string (defaults to sys.argv though)
-ErgoNamespace(name='foo', scream='TEST TEST', verbosity=3)
+KizbraNamespace(name='foo', scream='TEST TEST', verbosity=3)
 >>> 
 >>> cli.parse('foo -v')
 # <help/usage info...>
@@ -92,10 +104,10 @@ Expected all of the following flags/arguments: 'scream', 'verbosity'
 (Got 'verbosity')
 >>> 
 >>> cli.parse('foo --add 1 6')
-ErgoNamespace(addition=7, name='foo')
+KizbraNamespace(addition=7, name='foo')
 >>> 
 >>> cli.parse('foo -a')  # same as `foo --add`; default short alias is first letter of name (`short=None` removes entirely)
-ErgoNamespace(addition=4, name='foo')
+KizbraNamespace(addition=4, name='foo')
 >>> 
 >>> cli.parse('foo -a 1 2 -S "this is gonna error" -v')
 # <help/usage info...>
@@ -120,13 +132,13 @@ FLAGS
 ```
 (To get rid of the default `help` flag, pass `no_help=True` to `CLI()`)
 
-Additionally, one may use the reduced `ergo.simple` parser. See the [ergo.simple](#simple-cli) section for more.
+Additionally, one may use the reduced `kizbra.simple` parser. See the [kizbra.simple](#simple-cli) section for more.
 
 ## Documentation
 
 ### CLI
 ```py
-from ergo import CLI
+from kizbra import CLI
 ```
 The main dish.  
 
@@ -156,7 +168,7 @@ Methods:
     - `dest` (`str`): The name this flag will be referenced by from the command line (with long prefix), as well as the name it will
         appear as in the final `CLI.parse()` output. Defaults to the decorated function's `__name__`.
     - `short` (`str`): This flag's single-character short alias, to be used from the command line with `cli.flag_prefix`. If `None`,
-        no short alias will be made; if left alone (i.e. passed `ergo.misc._Null`), defaults to the first alphanumeric character in the
+        no short alias will be made; if left alone (i.e. passed `kizbra.misc._Null`), defaults to the first alphanumeric character in the
         decorated function's `__name__`.
     - `default`: Default value of this flag if not invoked during parsing. (no default value if `_Null`)
     - `namespace` (`dict`): The starting values for this flag's "namespace", a `types.SimpleNamespace` object passed as the first argument
@@ -237,7 +249,7 @@ Methods:
     Returns `cli.defaults` until `cli.prepare()` is used, thereafter returning the result of `cli.parse()` (as it had been called with the
     arguments passed to `prepare()`). Again, see [Workflow](#workflow) for further info.
 - `defaults` *(property)*:  
-    Returns the values of the `default=...` kwargs set from `cli.flag` and `cli.arg` as an `ErgoNamespace` object.
+    Returns the values of the `default=...` kwargs set from `cli.flag` and `cli.arg` as an `KizbraNamespace` object.
 - `__setattr__`:  
     CLI objects have `__setattr__` overridden to facilitate the creation of "groups", which apply their clump settings to themselves
     as a whole rather than each of their members individually. Entities can also be clumped within groups.
@@ -245,7 +257,7 @@ Methods:
     `cli.group_name_here = Group(*, required=False, AND=_Null, OR=_Null, XOR=_Null)`  
     *See identical args of `flag` and `clump`.*
 
-    If the R-value is not an `ergo.Group` instance, the setattr call will go through normally.
+    If the R-value is not an `kizbra.Group` instance, the setattr call will go through normally.
 
     After the creation of a group, its methods such as `clump` (for internal clumping) can be accessed as `@cli.group_name_here.clump()`;
     others are `arg`, `flag`, and `command`.
@@ -312,7 +324,7 @@ def add(a: int = 4, *b: int):
 ```
 
 This demonstrates two new things: splat (`*`) parameters and default arguments. These in fact take advantage of standard Python machinery, with no additional
-finagling on ergo's end: flag callbacks by design are passed as many arguments as the user gives them, up to their number of parameters, and the presence of
+finagling on kizbra's end: flag callbacks by design are passed as many arguments as the user gives them, up to their number of parameters, and the presence of
 a splat simply brings said "number of parameters" up to `sys.maxsize` -- which, presumably, the user will always pass fewer arguments than. The presence of a
 default argument, similarly, just allows the callback to not error if the user doesn't pass it all of its parameters.
 
@@ -323,13 +335,13 @@ If this callback were invoked as...
 - `--addition`: would return `4` (default argument)
 
 ### Workflow
-Ergo allows your whole package to center in functionality around the CLI.  
+Kizbra allows your whole package to center in functionality around the CLI.  
 I don't quite know if this is good or bad design&nbsp;-- leaning toward "bad", perhaps, because I only
 needed it for a package that started as a CLI-only script and grew awkwardly into an importable
 module&nbsp;-- but it certainly works, and it hasn't been at all disagreeable IMHO.
 
 In a small script without many files, particularly one that's only meant to be run as a command-line script
-and not used as a Python module, it suffices to simply define `cli = ergo.CLI(...)` within it and make use
+and not used as a Python module, it suffices to simply define `cli = kizbra.CLI(...)` within it and make use
 thereof with something like `args = cli.parse()`.
 
 However, in a larger package distributed both as a CLI script *and* an importable Python module, a problem
@@ -339,12 +351,12 @@ leading to errors when it doesn't find in `sys.argv` what it thinks it needs to.
 The obvious solution is to take advantage of `if __name__ == '__main__'`. But, after this, the question of
 what to do with the CLI part arises: either it can be separated, itself hooking into the module and compiling
 the command-line output itself, *or* things can go the other way around, with the module hooking into the CLI
-and making use of default values when none were given. Ergo allows the former, of course, but it also facilitates
+and making use of default values when none were given. Kizbra allows the former, of course, but it also facilitates
 the latter.
 
 There are three parts to this functionality:
 
-- `cli.result`. This is a property of `ergo.CLI()` objects that, up until `cli.prepare()` is called, will only return
+- `cli.result`. This is a property of `kizbra.CLI()` objects that, up until `cli.prepare()` is called, will only return
   default values.
 - `cli.prepare()`. Prepraes this CLI to parse from the command line *rather than* use default values. This function
   should only be called from the "main" entry point (keeping it untouched if the module is imported).
@@ -363,7 +375,7 @@ Here is an example:
 
 ```py
 # cli.py
-from ergo import CLI
+from kizbra import CLI
 
 cli = CLI('Demo')
 
@@ -406,14 +418,14 @@ def bar():
 
 ### Simple CLI
 
-_**NOTE: ergo.simple will be deprecated soon -- or, at the very least, demoted to "recipe" status.**_
+_**NOTE: kizbra.simple will be deprecated soon -- or, at the very least, demoted to "recipe" status.**_
 
-As an alternative to the full `ergo.CLI` parser, one may use (as mentioned above) a reduced form of it, dubbed `ergo.simple`. It works as follows:
+As an alternative to the full `kizbra.CLI` parser, one may use (as mentioned above) a reduced form of it, dubbed `kizbra.simple`. It works as follows:
 
 ```py
-import ergo
+import kizbra
 
-@ergo.simple
+@kizbra.simple
 def main(positional, *consuming, flag):
     """Simple-CLI demo"""
     print('MAIN:', positional, consuming, flag)
@@ -450,36 +462,36 @@ SUBCMD: ({'s', 'e', 't'}, {'s', 'e', 't'}) whisper
 SUBCMD: ({'s', 'e', 't'}, {'s', 'e', 't'}) whisper
 ```
 
-`ergo.simple` has no concept of AND/OR/XOR clumps, so it isn't suitable for an application requiring those. It also, rather than being only a *parsing*
+`kizbra.simple` has no concept of AND/OR/XOR clumps, so it isn't suitable for an application requiring those. It also, rather than being only a *parsing*
 tool, somewhat submits to the "click philosophy" of intertwining argument parsing with the actual program execution: rather than assign each individual
-option a function processing only its own value and provide these values to the user without caring what happens afterward (as the standard `ergo.CLI`
+option a function processing only its own value and provide these values to the user without caring what happens afterward (as the standard `kizbra.CLI`
 does), it expects the actual functions of a given program to be decorated and passes CLI arguments to them directly. This is a bit iffy, but it does
-make for less boilerplate... overall, however, `ergo.CLI` should be preferred when possible.
+make for less boilerplate... overall, however, `kizbra.CLI` should be preferred when possible.
 
 Its implementation works because Python already has syntax to define positional parameters and name-only parameters in a function; positional options
-& flags on a command line can be likened to these easily. Currently, however, `ergo.simple` cannot handle **kwargs by taking arbitrary flags. If that
+& flags on a command line can be likened to these easily. Currently, however, `kizbra.simple` cannot handle **kwargs by taking arbitrary flags. If that
 turns out to be a necessity at some point down the line, this will change.
 
-If one should wish to configure their new `ergo.simple` objects, the following class attributes are reassignable:
+If one should wish to configure their new `kizbra.simple` objects, the following class attributes are reassignable:
 
-- `ergo.simple._` (`str`): As in `CLI.flag`, this value controls what the `_` character in a Python identifier's name will be replaced with on the command line.
-- `ergo.simple.flag_prefix` (`str`): Identical to `flag_prefix` in `CLI.__init__()`.
-- `ergo.simple.no_help` (`bool`): Identical to `no_help` in `CLI.__init__()`.
-- `ergo.simple.short_flags` (`bool`): Determines whether to create short aliases out of keyword-parameter names (e.g. `flag` becoming both `--flag` and `-f`).
+- `kizbra.simple._` (`str`): As in `CLI.flag`, this value controls what the `_` character in a Python identifier's name will be replaced with on the command line.
+- `kizbra.simple.flag_prefix` (`str`): Identical to `flag_prefix` in `CLI.__init__()`.
+- `kizbra.simple.no_help` (`bool`): Identical to `no_help` in `CLI.__init__()`.
+- `kizbra.simple.short_flags` (`bool`): Determines whether to create short aliases out of keyword-parameter names (e.g. `flag` becoming both `--flag` and `-f`).
 
 Note that changing these will not change their values for already-instantiated objects.  
 Note also that decorated functions still define `__call__`, so they can be called as normal rather than with `.run()` or `.search()`.
 
 
 ### More typehints
-Ergo itself provides two additional typehint aids: `booly` and `auto`.
+Kizbra itself provides two additional typehint aids: `booly` and `auto`.
 
-`ergo.booly`:
+`kizbra.booly`:
 - The usual `bool` type isn't particularly useful as a converter, because all the strings it's going to be passed are truthy. `booly`, on the other hand,
     evaluates args that are bool ... -y: booleanlike. Returns `True` if passed any of `yes`, `y`, `true`, `t`, `1`, and `False` if passed any of `no`, `n`, `false`, `f`.
     Argument is `str.lower`ed.
 
-`ergo.auto`:
+`kizbra.auto`:
 - `auto` by itself:
     - Works identically to a normal converter, but calls `ast.literal_eval()` on the string it's passed. If an error results, meaning the string does
     not contain a literal of any sort, returns the string itself.
@@ -492,7 +504,7 @@ Ergo itself provides two additional typehint aids: `booly` and `auto`.
 Feel free to play around with different `cli.parse()` arguments on the below example:
 
 ```py
-from ergo import auto, booly, CLI
+from kizbra import auto, booly, CLI
 
 cli = CLI()
 

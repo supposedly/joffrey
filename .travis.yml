@@ -12,9 +12,9 @@ install:
   - pip install pytest pytest-cov codecov
 before_script:
   - pip install -U .
-  - ERGO=$(pip show ergo | grep "Location" | grep -o "/.*")/ergo
+  - KIZBRA=$(pip show kizbra | grep "Location" | grep -o "/.*")/kizbra
 script:
-  - py.test --cov="$ERGO" tests/
+  - py.test --cov="$KIZBRA" tests/
 after_success:
   - codecov
 deploy:

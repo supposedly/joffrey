@@ -1,5 +1,5 @@
 import pytest
-from ergo import CLI, Group, errors
+from kizbra import CLI, Group, errors
 
 cli = CLI(systemexit=False)
 cli.grp_0 = Group(XOR=0)

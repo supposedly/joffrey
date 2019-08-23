@@ -1,6 +1,6 @@
 import pytest
 
-from ergo import CLI, Group
+from kizbra import CLI, Group
 
 
 @pytest.fixture

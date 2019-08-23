@@ -4,12 +4,12 @@ with open('README.md') as f:
     long_description = ''.join(f.read().split('[](#separator-for-pypi)')[::2])
 
 setuptools.setup(
-  name='ergo',
+  name='kizbra',
   license='MIT',
   version='0.5.1',
   author='Elias Tarhini',
   author_email='eltrhn@gmail.com',
-  url='https://github.com/eltrhn/ergo',
+  url='https://github.com/supposedly/kizbra',
   description='A powerful Python 3 command-line parser',
   long_description=long_description,
   long_description_content_type='text/markdown',

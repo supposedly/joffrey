@@ -1,5 +1,5 @@
 import pytest
-from ergo import CLI, auto, booly, misc as ergo_misc
+from kizbra import CLI, auto, booly, misc as kizbra_misc
 
 cli = CLI(systemexit=False)
 
@@ -29,7 +29,7 @@ def auto2(one: auto(int, list, str), two: ~auto(int) = None):
     return one, two
 
 
-@ergo_misc.typecast  # just to test the one thing with default args
+@kizbra_misc.typecast  # just to test the one thing with default args
 def whatever(a, b=2):
     return a, b
 
@@ -76,14 +76,14 @@ def test_booly(parse):
 
 
 def test_typecast_with_kwargs():
-    @ergo_misc.typecast
+    @kizbra_misc.typecast
     def blah(*, a: int, b, c: str = 3):
         return a, b, c
     assert blah(a='1', b=2) == (1, 2, 3)
     with pytest.raises(TypeError):
         blah('too', 'many', 'pos', 'args', a=None, b=None)
     
-    @ergo_misc.typecast
+    @kizbra_misc.typecast
     def varkw(**kw: int):
         return kw
     assert varkw(a='1', b='2') == {'a': 1, 'b': 2}

@@ -6,4 +6,5 @@ __pycache__/*
 
 build/*
 dist/*
-ergo.egg-info/*
+distOLD/*
+kizbra.egg-info/*
