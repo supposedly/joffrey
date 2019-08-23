@@ -1,7 +1,7 @@
 # Yet Another Command-Line-Argument Parser
 
-[![Build Status](https://travis-ci.com/eltrhn/kizbra.svg?branch=master)](https://travis-ci.com/eltrhn/kizbra)
-[![codecov](https://codecov.io/gh/eltrhn/kizbra/branch/master/graph/badge.svg)](https://codecov.io/gh/eltrhn/kizbra)
+[![Build Status](https://travis-ci.com/supposedly/kizbra.svg?branch=master)](https://travis-ci.com/supposedly/kizbra)
+[![codecov](https://codecov.io/gh/supposedly/kizbra/branch/master/graph/badge.svg)](https://codecov.io/gh/supposedly/kizbra)
 
 I'm tired of working around argparse. This suits my needs a tad better; vaguely inspired by
 [discord.py](https://github.com/Rapptz/discord.py)'s brilliant
