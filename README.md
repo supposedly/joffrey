@@ -1,7 +1,7 @@
 # Yet Another Command-Line-Argument Parser
 
-[![Build Status](https://travis-ci.com/supposedly/kizbra.svg?branch=master)](https://travis-ci.com/supposedly/kizbra)
-[![codecov](https://codecov.io/gh/supposedly/kizbra/branch/master/graph/badge.svg)](https://codecov.io/gh/supposedly/kizbra)
+[![Build Status](https://travis-ci.com/eltrhn/kizbra.svg?branch=master)](https://travis-ci.com/eltrhn/kizbra)
+[![codecov](https://codecov.io/gh/eltrhn/kizbra/branch/master/graph/badge.svg)](https://codecov.io/gh/eltrhn/kizbra)
 
 I'm tired of working around argparse. This suits my needs a tad better; vaguely inspired by
 [discord.py](https://github.com/Rapptz/discord.py)'s brilliant
@@ -43,13 +43,13 @@ to (by pure coincidence) share a number of features with kizbra -- but it's curr
 depend on argparse underneath (which I'm trying my best to get away from), so I'd say we're good.
 
 Kizbra, by the way, is still an experiment. If it really doesn't solve the same problem for you that it does for me,
-I think you'd be better off trying something else -- [here's a list](https://gist.github.com/eltrhn/01224262b816df21b601ab0784d5f999)
+I think you'd be better off trying something else -- [here's a list](https://gist.github.com/supposedly/01224262b816df21b601ab0784d5f999)
 of alternatives to check out!
 
 
 ## The name
 Kizbra, or كزبرة, is the Lebanese Arabic name of Chinese parsley. **Pars**ley for parsing. (You may know the herb as
-coriander or cilantro instead. The Arabic name of 'actual' parsely, بقدونس, isn't so catchy when transliterated
+coriander or cilantro instead, and the Arabic name of 'actual' parsely sadly isn't so catchy when transliterated
 into English.)
 
 This project's original name was `ergo`, but the *only* reason it had this name was that it hadn't yet been taken on
@@ -335,43 +335,38 @@ If this callback were invoked as...
 - `--addition`: would return `4` (default argument)
 
 ### Workflow
-Kizbra allows your whole package to center in functionality around the CLI.  
-I don't quite know if this is good or bad design&nbsp;-- leaning toward "bad", perhaps, because I only
-needed it for a package that started as a CLI-only script and grew awkwardly into an importable
-module&nbsp;-- but it certainly works, and it hasn't been at all disagreeable IMHO.
+Kizbra allows your whole package to center in functionality around its CLI.  
+I don't quite know if that's good or bad design&nbsp;-- leaning toward "bad", perhaps, because I only
+needed it for a package that started as a command-line script and grew awkwardly into an importable
+module&nbsp;-- but it certainly works, and it hasn't been particularly disagreeable IMO.
 
-In a small script without many files, particularly one that's only meant to be run as a command-line script
-and not used as a Python module, it suffices to simply define `cli = kizbra.CLI(...)` within it and make use
-thereof with something like `args = cli.parse()`.
+Here's the deal: in a small script, one that's (say) only a few files and meant to be run from the command line
+rather than being imported, it suffices to define `cli = kizbra.CLI(...)` and then call `cli.parse()` to get
+your input values. However, in a larger package distributed both as a CLI script *and* an importable Python module, a 'problem'
+arises: the module will try to read from the command line even if it's only being imported,
+leading to errors when it doesn't find in `sys.argv` what it thinks it needs to. This is what `__name__ == '__main__'`
+is for, of course, but *then*... what to do with the CLI? Should it be separated, hooking into the main module
+and compiling command-line output itself? Or should things go the other way around, with the module hooking into
+the CLI and making use of default values to 'fill in the gaps'?
 
-However, in a larger package distributed both as a CLI script *and* an importable Python module, a problem
-arises: the module will start thinking it should read from the command line even if it's only being imported,
-leading to errors when it doesn't find in `sys.argv` what it thinks it needs to.
+The former is probably the usual way to do things, and any command-line-parsing utility of course allows it by
+default. Kizbra facilitates the latter, too, though. It has three parts to it:
 
-The obvious solution is to take advantage of `if __name__ == '__main__'`. But, after this, the question of
-what to do with the CLI part arises: either it can be separated, itself hooking into the module and compiling
-the command-line output itself, *or* things can go the other way around, with the module hooking into the CLI
-and making use of default values when none were given. Kizbra allows the former, of course, but it also facilitates
-the latter.
-
-There are three parts to this functionality:
-
-- `cli.result`. This is a property of `kizbra.CLI()` objects that, up until `cli.prepare()` is called, will only return
-  default values.
-- `cli.prepare()`. Prepraes this CLI to parse from the command line *rather than* use default values. This function
-  should only be called from the "main" entry point (keeping it untouched if the module is imported).
-- `cli.set_defaults()`. Changes the CLI's default values, but importantly: if only called from the "main" entry point, allows
-  segregation of "command-line defaults" from "module defaults", with the defaults set in this function being the former
-  and the defaults set via `@cli.command()` and `@cli.flag()` being the latter. This is useful, say, for implementation of
-  a `-q`/`--quiet` flag: when imported as a module ("module default") the `-q` flag should be set by default, but
-  when used from the command line the `-q` flag should only be set if the user does so (and should be unset as a default).
+- `cli.result`. A property of `kizbra.CLI()` objects that, up until `cli.prepare()` is called, only returns default values.
+- `cli.prepare()`. Prepares this CLI to parse from the command line *rather than* use default values: specifically,
+  causes `cli.result` to call `cli.parse()` the next time it's accessed, returning only those values from then on. This
+  method should be called from the main command-line entry point, keeping it untouched if the module is imported.
+- `cli.set_defaults()`. Changes the CLI's default values, but importantly: if only called from the command-line entry point, allows
+  separation of "command-line defaults" from "module defaults", with the defaults set in this function being command-line-level
+  and the defaults set via `@cli.command()` and `@cli.flag()` being the module-level. This is useful, for example, in the
+  implementation of a `-q`/`--quiet` flag: when imported as a module the `-q` flag should be set by default, but
+  when used from the command line it should only become set if the user sets it.
 
 The module as a whole can use `cli.result` to grab important values, and if `cli.prepare()` and `cli.set_defaults()` are used
-correctly, this structure will result in the module's behaving seamlessly regardless of whether it was imported or invoked
-directly from the command line.
+correctly, this structure will result in the module's behaving seamlessly regardless of whether it was invoked directly from
+the command line or whether it was imported.
 
-Here is an example:
-
+Here's an example:
 
 ```py
 # cli.py
@@ -383,25 +378,33 @@ cli = CLI('Demo')
 def quiet():
     return True
 
-@cli.flag(default='default value')
-def important_value():
-    return 'foo'
+@cli.arg(default='default value')
+def important_value(value):
+    return value
 
 ...
 ```
 ```py
-# Main file, command-line entry point
+# main file
 from modulename.cli import cli
 
 ...
 
+
 def main():
-    cli.prepare()  # Including the desired cli.parse() args (i.e. inp/strict/systemexit)
-    # command-line default: when used from terminal, this module should print unless user says not to
-    cli.set_defaults(quiet=False)
+    if not cli.quiet:
+        print('hello!')
     do_something_with(cli.result.important_value)
 
+
 if __name__ == '__main__':
+    cli \
+      # tell cli.result to call cli.parse() the next time it's used,
+      # rather than returning defaults
+      .prepare() \
+      # set `quiet` to be false by default, because the script is being run from the
+      # command line (where output by default is acceptable) rather than being imported
+      .set_defaults(quiet=False)
     main()
 ```
 ```py
