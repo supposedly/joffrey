@@ -49,13 +49,18 @@ of alternatives to check out!
 
 ## The name
 Kizbra, or كزبرة, is the Lebanese Arabic name of Chinese parsley. **Pars**ley for parsing. (You may know the herb as
-coriander or cilantro instead, and the Arabic name of 'actual' parsely sadly isn't so catchy when transliterated
+coriander or cilantro instead, and the Arabic name of 'actual' parsley sadly isn't so catchy when transliterated
 into English.)
 
-This project's original name was `ergo`, but the *only* reason it had this name was that it hadn't yet been taken on
-PyPI. I changed it to resolve a name conflict with another "ergo" project that I felt was more-deserving of the PyPI name.
-However, I've received some feedback that `kizbra` sounds awfully strange or even innuendo-y in an English context,
-so consider this only an intermediate name while I think of a better one ;)
+This project's original name was `ergo`, but there was really no reason it should have this name; it popped into my head
+at one point and had not yet been taken on PyPI, so I went for it, but it didn't hold any particular relationship to the
+project itself.
+
+And not only was the name mostly irrelevant, but it was hogging up a perfectly good PyPI identifier that could go to
+a much-more-deserving project -- in particular, one whose userbase did *not* solely consist of the creator's dogfooding!
+So, after initiating communication with the maintainer of evilsocket/ergo (one of many Python "ergos" out there), I opted
+to rename this project and free that spot up. However, I've received some feedback that `kizbra` sounds awfully strange
+or even innuendo-y in an English context, so consider this only an intermediate name while I think of a better one ;)
 
 [](#separator-for-pypi)
 
