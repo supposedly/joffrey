@@ -1,6 +1,6 @@
 import setuptools
 
-with open('README.md') as f:
+with open('README.md', encoding='utf-8') as f:
     long_description = ''.join(f.read().split('[](#separator-for-pypi)')[::2])
 
 setuptools.setup(

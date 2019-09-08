@@ -49,11 +49,11 @@ of alternatives to check out!
 
 ## The name
 **Pars**ley, for **pars**ing, is called جعفری /d͡ʒæʔfæˈɾi/ in Farsi. That glottal stop is elided into a vowel in Iran,
-giving /d͡ʒæːfæˈɾi/, which if you squint kindasorta resembles a heavily accented pronunciation of "Jeffrey".
+giving /d͡ʒæːfæˈɾi/, which if you squint hard enough resembles a heavily accented pronunciation of "Jeffrey".
 
 *Jeffrey* was originally called `ergo`. This was a bad name that wasn't related to the project one bit. My largest reason
-for choosing it was that it hadn't yet been taken on PyPI, but this now meant that a pretty good PyPI identifier was being
-hogged by a pretty undeserving project whose sole developer was also its sole user.
+for choosing it was that it hadn't yet been taken on PyPI, but this now meant that a project whose sole developer was also
+its sole user was hogging a pretty good PyPI identifier, and so I changed it to free that spot up.
 
 Then my first choice for a rename was `kizbra`, the name of Chinese **pars**ley (AKA cilantro, coriander) in Lebanese Arabic,
 but I bounced it off of a bunch of people and their first impressions were all either strange or downright innuendo-y. That's
