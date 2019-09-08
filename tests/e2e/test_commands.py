@@ -1,5 +1,5 @@
 import pytest
-from kizbra import CLI, Group, errors
+from jeffrey import CLI, Group, errors
 
 cli = CLI(systemexit=False)
 cli.sc = Group(XOR=0)

@@ -1,6 +1,6 @@
 import pytest
 
-from kizbra import CLI, Group
+from jeffrey import CLI, Group
 
 
 @pytest.fixture

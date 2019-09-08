@@ -3,7 +3,7 @@ import shlex
 import sys
 
 from .core import CLI
-from .misc import _Null, KizbraNamespace, convert
+from .misc import _Null, JeffreyNamespace, convert
 
 
 class Simpleton:
@@ -95,7 +95,7 @@ class Simpleton:
         args = []
         commands = []
         for name, val in flags.copy().items():
-            if isinstance(val, KizbraNamespace):
+            if isinstance(val, JeffreyNamespace):
                 # This used to be:
                 # self.commands[name].call(**dict(flags.pop(name)._.items()))
                 # But commands being run before the main callback was bad

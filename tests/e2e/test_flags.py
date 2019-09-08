@@ -1,4 +1,4 @@
-from kizbra import CLI
+from jeffrey import CLI
 
 cli = CLI()
 cmd = cli.command('cmd')

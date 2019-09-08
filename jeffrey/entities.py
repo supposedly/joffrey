@@ -19,7 +19,7 @@ class Entity:
     params: arguments this entity takes
     argcount: how many args this entity can take
     func: original function passed to __init__()
-    callback: func decorated with kizbra.misc.typecast()
+    callback: func decorated with jeffrey.misc.typecast()
     help: entity's helptext
     identifier: custom name if __init__() was given one else func.__name__
     name: identical to identifier but subclasses can override
