@@ -1,6 +1,6 @@
 import pytest
 
-from jeffrey import CLI, Group
+from joffrey import CLI, Group
 
 
 @pytest.fixture

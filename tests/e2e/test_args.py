@@ -1,6 +1,6 @@
 import pytest
 
-from jeffrey import CLI
+from joffrey import CLI
 
 cli = CLI(systemexit=False)
 

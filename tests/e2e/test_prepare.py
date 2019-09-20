@@ -1,6 +1,6 @@
 import pytest
 
-from jeffrey import CLI
+from joffrey import CLI
 
 @pytest.fixture
 def cli():

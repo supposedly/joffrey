@@ -203,11 +203,11 @@ class multiton:
         return get_instance
 
 
-class JeffreyNamespace(SimpleNamespace):
+class JoffreyNamespace(SimpleNamespace):
     """
     dict+SimpleNamespace with a `_` attribute
     for additional dict-like stuff
-    (needed because, say, JeffreyNamespace().values()
+    (needed because, say, JoffreyNamespace().values()
     may conflict with an item named 'values'; a single
     underscore is less likely to conflict with anything
     chosen by a user)

@@ -11,7 +11,7 @@ from itertools import chain, zip_longest, starmap
 from . import errors
 from .clumps import And, Or, Xor, ClumpSet
 from .entities import Entity, Arg, Flag
-from .misc import JeffreyNamespace, _Null
+from .misc import JoffreyNamespace, _Null
 
 
 _FILE = os.path.basename(sys.argv[0])
@@ -124,9 +124,9 @@ class _Handler:
     _required: Set of all entities created with required=True
       (for which to raise an error if not provided)
     
-    arg_map: Dict of {arg name: jeffrey.entity.Arg object}
-    commands: Dict of {command name: jeffrey.core.Command object}
-    flags: Dict of {flag name: jeffrey.entity.Flag object}
+    arg_map: Dict of {arg name: joffrey.entity.Arg object}
+    commands: Dict of {command name: joffrey.core.Command object}
+    flags: Dict of {flag name: joffrey.entity.Flag object}
     args: List of positional arguments provided in the current run
     """
 
@@ -158,7 +158,7 @@ class _Handler:
     @property
     def defaults(self):
         # All subcommands would have a default value of their own defaults, hence the dict comp
-        return JeffreyNamespace(**self._defaults, **{cmd.name: cmd.defaults for cmd in self.commands.values()})
+        return JoffreyNamespace(**self._defaults, **{cmd.name: cmd.defaults for cmd in self.commands.values()})
     
     @property
     def parent_and(self):
@@ -260,7 +260,7 @@ class _Handler:
         parsed: Set of entities' names that were extracted from user input
         groups: Clump-groups to take into account when checking
         
-        Enforce AND/OR/XOR rules. Mostly the 'heart' of jeffrey.
+        Enforce AND/OR/XOR rules. Mostly the 'heart' of joffrey.
         """
         
         # Entities to eliminate for each clump
@@ -386,7 +386,7 @@ class _Handler:
     
     def flag(self, dest=None, short=_Null, *, aliases=(), required=False, default=_Null, namespace=None, help=None, _='-'):
         """
-        dest: What this flag's name should be in the final resultant JeffreyNamespace
+        dest: What this flag's name should be in the final resultant JoffreyNamespace
         short: Shorthand alias for this flag; _Null => first available letter, None = no short alias
         aliases: Other aliases for this flag
         required: Whether this flag is required to be provided
@@ -422,7 +422,7 @@ class _Handler:
         name: This command's name
         desc: This command's helptext (a short description of it)
         AND/OR/XOR: Clump values for this command as a whole
-        from_cli: If not None, jeffrey.core.CLI object to create this command from
+        from_cli: If not None, joffrey.core.CLI object to create this command from
         aliases: Aliases for this command
         _: What to replace underscores in this command's name with ((XXX: is that even applicable? commands aren't attrs))
         *args, **kwargs: See Command.__init__()
@@ -479,7 +479,7 @@ class ParserBase(_Handler, HelperMixin):
     
     def __setattr__(self, name, val):
         """
-        Special-cased for jeffrey.core.Group objects: re-initializes the
+        Special-cased for joffrey.core.Group objects: re-initializes the
         group as a SubHandler and adds it to self._groups
         """
         if not isinstance(val, Group):
@@ -588,7 +588,7 @@ class ParserBase(_Handler, HelperMixin):
           entity,
           namespaces.setdefault(
             entity.name,
-            JeffreyNamespace(**entity.namespace)
+            JoffreyNamespace(**entity.namespace)
             )
           )
     
@@ -707,7 +707,7 @@ class ParserBase(_Handler, HelperMixin):
         strict: Whether to disallow excessive args and/or unknown non-propagable flags
         systemexit: Whether to raise SystemExit on error or just fail with the original exception
         propagate_unknowns: Whether to bubble up unknown flags to parent handler
-        return: Parsed-out JeffreyNamespace from inp, unknown flags found
+        return: Parsed-out JoffreyNamespace from inp, unknown flags found
         
         Backend to parse() -- does the actual parsing and returns result + unknown flags to propagate
         """
@@ -756,7 +756,7 @@ class ParserBase(_Handler, HelperMixin):
         # Place defaults first then override them with provided values
         final = {**self._defaults, **{name: value for g in self._groups for name, value in g._defaults.items()}, **parsed}
         
-        nsp = JeffreyNamespace(**final)
+        nsp = JoffreyNamespace(**final)
         # One final check after enforce_clumps: all required entities must have been provided
         if self._required.difference(nsp):
             raise errors.RequirementError('Expected the following required arguments: {}\nGot {}'.format(
@@ -771,9 +771,9 @@ class ParserBase(_Handler, HelperMixin):
         systemexit: Whether to raise SystemExit on error or just fail with the original exception
         strict: Whether to disallow excessive args and/or unknown non-propagable flags
         propagate_unknowns: Whether to bubble up unknown flags to parent handler
-        return: Resultant JeffreyNamespace from parse
+        return: Resultant JoffreyNamespace from parse
 
-        Parses user input into an JeffreyNamespace. If systemexit, prints usage info on error.
+        Parses user input into an JoffreyNamespace. If systemexit, prints usage info on error.
         """
         if inp is None:
             inp = sys.argv[1:]
@@ -797,7 +797,7 @@ class ParserBase(_Handler, HelperMixin):
         *args, **kwargs: see parse().
         return: self
         
-        Makes self.result return an JeffreyNamespace of actual
+        Makes self.result return an JoffreyNamespace of actual
         parsed values (not just defaults).
         Returns self to allow a `prepare()` call to be chained
         into `set_defaults()` and/or `result`.
@@ -915,7 +915,7 @@ class Command(SubHandler, ParserBase):
     @classmethod
     def from_cli(cls, cli, parent, name):
         """
-        cli: jeffrey.core.CLI object to create command from
+        cli: joffrey.core.CLI object to create command from
         parent: ParserBase object to attach new command to
         name: name of new command
 
@@ -933,7 +933,7 @@ class Command(SubHandler, ParserBase):
 class CLI(ParserBase):
     """
     The 'main dish', as phrased in the README.
-    This is what users import and base their jeffrey applications off of.
+    This is what users import and base their joffrey applications off of.
     """
     def __str__(self):  # for help screen (because main CLI shouldn't show its own name)
         return ''

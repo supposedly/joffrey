@@ -12,9 +12,9 @@ install:
   - pip install pytest pytest-cov codecov
 before_script:
   - pip install -U .
-  - KIZBRA=$(pip show kizbra | grep "Location" | grep -o "/.*")/kizbra
+  - JOFFREY=$(pip show joffrey | grep "Location" | grep -o "/.*")/joffrey
 script:
-  - py.test --cov="$KIZBRA" tests/
+  - py.test --cov="$JOFFREY" tests/
 after_success:
   - codecov
 deploy:

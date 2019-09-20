@@ -1,10 +1,10 @@
 from textwrap import dedent
 
-import jeffrey
+import joffrey
 import pytest
 
 
-@jeffrey.simple
+@joffrey.simple
 def main(a: int, *b: list, c: set = None):
     return a, b, c
 
@@ -15,20 +15,20 @@ def FFF(one: str.upper, *, two: lambda x: tuple(map(int, x))):
     return one, two
 
 
-jeffrey.simple._ = '.'
-jeffrey.simple.short_flags = False
+joffrey.simple._ = '.'
+joffrey.simple.short_flags = False
 
 
-@jeffrey.simple
+@joffrey.simple
 def main2(*, asd_f):
     return asd_f
 
 
-jeffrey.simple._ = '-'
-jeffrey.simple.short_flags = True
+joffrey.simple._ = '-'
+joffrey.simple.short_flags = True
 
 
-@jeffrey.simple
+@joffrey.simple
 def segundo(positional, *consuming, flag):
     """Simple-CLI demo"""
     print('MAIN:', positional, consuming, flag)
@@ -48,7 +48,7 @@ def subcmd(*consuming: set, flag: str.lower):
     print('SUBCMD:', consuming, flag)
 
 
-jeffrey.simple.no_top_level()  # just so that part runs /shrug
+joffrey.simple.no_top_level()  # just so that part runs /shrug
 
 
 def test_simple():

@@ -1,7 +1,7 @@
 # Yet Another Command-Line-Argument Parser
 
-[![Build Status](https://travis-ci.com/supposedly/jeffrey.svg?branch=master)](https://travis-ci.com/supposedly/jeffrey)
-[![codecov](https://codecov.io/gh/supposedly/jeffrey/branch/master/graph/badge.svg)](https://codecov.io/gh/supposedly/jeffrey)
+[![Build Status](https://travis-ci.com/supposedly/joffrey.svg?branch=master)](https://travis-ci.com/supposedly/joffrey)
+[![codecov](https://codecov.io/gh/supposedly/joffrey/branch/master/graph/badge.svg)](https://codecov.io/gh/supposedly/joffrey)
 
 I'm tired of working around argparse. This suits my needs a tad better; vaguely inspired by
 [discord.py](https://github.com/Rapptz/discord.py)'s brilliant
@@ -10,7 +10,7 @@ I'm tired of working around argparse. This suits my needs a tad better; vaguely 
 [](#separator-for-pypi)
 
 ```nginx
-pip install jeffrey
+pip install joffrey
 ```
 
 ## Contents
@@ -27,7 +27,6 @@ pip install jeffrey
 
 [](#separator-for-pypi)
 
-
 ## Why?
 I needed a way to define sort-of-complex interdependencies between command-line options. None of the packages
 I found\* were able to handle this out of the box to an acceptable degree, so I decided to try my own hand;
@@ -35,38 +34,28 @@ I feel like the lib should be able to handle this stuff itself, without your nee
 that these two flags aren't used at the same time as this arg"* or *"make sure all these things appear
 together, or alternatively that this second thing does"* to external functions or post-parsing if-statements.
 
-*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which did beat jeffrey
+*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which did beat Joffrey
 to the idea of AND/OR/XOR clumps (by the names of "requires", "wants", and "conflicts"), albeit with a very different
 design philosophy overall; credit's due for (AFAIK) originating that concept, however! I also at about the same time
 found [argh](https://argh.readthedocs.io/en/latest/index.html), which despite not solving the clumping issue appears
-to (by pure coincidence) share a number of features with jeffrey -- but it's currently looking for maintainers and does
+to (by pure coincidence) share a number of features with Joffrey -- but it's currently looking for maintainers and does
 depend on argparse underneath (which I'm trying my best to get away from), so I'd say we're good.
 
-Jeffrey, by the way, is still an experiment. If it really doesn't solve the same problem for you that it does for me,
+Joffrey, by the way, is still an experiment. If it really doesn't solve the same problem for you that it does for me,
 I think you'd be better off trying something else -- [here's a list](https://gist.github.com/supposedly/01224262b816df21b601ab0784d5f999)
 of alternatives to check out!
 
 
 ## The name
 **Pars**ley, for **pars**ing, is called جعفری /d͡ʒæʔfæˈɾi/ in Farsi. That glottal stop is elided into a vowel in Iran,
-giving /d͡ʒæːfæˈɾi/, which if you squint hard enough resembles a heavily accented pronunciation of "Jeffrey".
-
-*Jeffrey* was originally called `ergo`. This was a bad name that wasn't related to the project one bit. My largest reason
-for choosing it was that it hadn't yet been taken on PyPI, but this now meant that a project whose sole developer was also
-its sole user was hogging a pretty good PyPI identifier, and so I changed it to free that spot up.
-
-Then my first choice for a rename was `kizbra`, the name of Chinese **pars**ley (AKA cilantro, coriander) in Lebanese Arabic,
-but I bounced it off of a bunch of people and their first impressions were all either strange or downright innuendo-y. That's
-never fun.
-
-So... Jeffrey.
+giving /d͡ʒæːfæˈɾi/, and if you squint hard enough that resembles a heavily accented pronunciation of "Joffrey".
 
 [](#separator-for-pypi)
 
 ## Examples
 
 ```py
-from jeffrey import CLI, Group
+from joffrey import CLI, Group
 
 cli = CLI('Quick demo program')
 # CLI.__setattr__() on Group objects is special-cased slightly
@@ -100,7 +89,7 @@ def add(a: int = 4, *b: int):  # can also provide default args and a type-coerci
 ```
 ```py
 >>> cli.parse('foo -S "test test" -vvvv')  # input will be shlex.split if given as a string (defaults to sys.argv though)
-JeffreyNamespace(name='foo', scream='TEST TEST', verbosity=3)
+JoffreyNamespace(name='foo', scream='TEST TEST', verbosity=3)
 >>> 
 >>> cli.parse('foo -v')
 # <help/usage info...>
@@ -108,10 +97,10 @@ Expected all of the following flags/arguments: 'scream', 'verbosity'
 (Got 'verbosity')
 >>> 
 >>> cli.parse('foo --add 1 6')
-JeffreyNamespace(addition=7, name='foo')
+JoffreyNamespace(addition=7, name='foo')
 >>> 
 >>> cli.parse('foo -a')  # same as `foo --add`; default short alias is first letter of name (`short=None` removes entirely)
-JeffreyNamespace(addition=4, name='foo')
+JoffreyNamespace(addition=4, name='foo')
 >>> 
 >>> cli.parse('foo -a 1 2 -S "this is gonna error" -v')
 # <help/usage info...>
@@ -136,13 +125,13 @@ FLAGS
 ```
 (To get rid of the default `help` flag, pass `no_help=True` to `CLI()`)
 
-Additionally, one may use the reduced `jeffrey.simple` parser. See the [jeffrey.simple](#simple-cli) section for more.
+Additionally, one may use the reduced `joffrey.simple` parser. See the [joffrey.simple](#simple-cli) section for more.
 
 ## Documentation
 
 ### CLI
 ```py
-from jeffrey import CLI
+from joffrey import CLI
 ```
 The main dish.  
 
@@ -172,7 +161,7 @@ Methods:
     - `dest` (`str`): The name this flag will be referenced by from the command line (with long prefix), as well as the name it will
         appear as in the final `CLI.parse()` output. Defaults to the decorated function's `__name__`.
     - `short` (`str`): This flag's single-character short alias, to be used from the command line with `cli.flag_prefix`. If `None`,
-        no short alias will be made; if left alone (i.e. passed `jeffrey.misc._Null`), defaults to the first alphanumeric character in the
+        no short alias will be made; if left alone (i.e. passed `joffrey.misc._Null`), defaults to the first alphanumeric character in the
         decorated function's `__name__`.
     - `default`: Default value of this flag if not invoked during parsing. (no default value if `_Null`)
     - `namespace` (`dict`): The starting values for this flag's "namespace", a `types.SimpleNamespace` object passed as the first argument
@@ -253,7 +242,7 @@ Methods:
     Returns `cli.defaults` until `cli.prepare()` is used, thereafter returning the result of `cli.parse()` (as it had been called with the
     arguments passed to `prepare()`). Again, see [Workflow](#workflow) for further info.
 - `defaults` *(property)*:  
-    Returns the values of the `default=...` kwargs set from `cli.flag` and `cli.arg` as an `JeffreyNamespace` object.
+    Returns the values of the `default=...` kwargs set from `cli.flag` and `cli.arg` as an `JoffreyNamespace` object.
 - `__setattr__`:  
     CLI objects have `__setattr__` overridden to facilitate the creation of "groups", which apply their clump settings to themselves
     as a whole rather than each of their members individually. Entities can also be clumped within groups.
@@ -261,7 +250,7 @@ Methods:
     `cli.group_name_here = Group(*, required=False, AND=_Null, OR=_Null, XOR=_Null)`  
     *See identical args of `flag` and `clump`.*
 
-    If the R-value is not an `jeffrey.Group` instance, the setattr call will go through normally.
+    If the R-value is not an `joffrey.Group` instance, the setattr call will go through normally.
 
     After the creation of a group, its methods such as `clump` (for internal clumping) can be accessed as `@cli.group_name_here.clump()`;
     others are `arg`, `flag`, and `command`.
@@ -328,7 +317,7 @@ def add(a: int = 4, *b: int):
 ```
 
 This demonstrates two new things: splat (`*`) parameters and default arguments. These in fact take advantage of standard Python machinery, with no additional
-finagling on jeffrey's end: flag callbacks by design are passed as many arguments as the user gives them, up to their number of parameters, and the presence of
+finagling on Joffrey's end: flag callbacks by design are passed as many arguments as the user gives them, up to their number of parameters, and the presence of
 a splat simply brings said "number of parameters" up to `sys.maxsize` -- which, presumably, the user will always pass fewer arguments than. The presence of a
 default argument, similarly, just allows the callback to not error if the user doesn't pass it all of its parameters.
 
@@ -339,13 +328,13 @@ If this callback were invoked as...
 - `--addition`: would return `4` (default argument)
 
 ### Workflow
-Jeffrey allows your whole package to center in functionality around its CLI.  
+Joffrey allows your whole package to center in functionality around its CLI.  
 I don't quite know if that's good or bad design&nbsp;-- leaning toward "bad", perhaps, because I only
 needed it for a package that started as a command-line script and grew awkwardly into an importable
 module&nbsp;-- but it certainly works, and it hasn't been particularly disagreeable IMO.
 
 Here's the deal: in a small script, one that's (say) only a few files and meant to be run from the command line
-rather than being imported, it suffices to define `cli = jeffrey.CLI(...)` and then call `cli.parse()` to get
+rather than being imported, it suffices to define `cli = joffrey.CLI(...)` and then call `cli.parse()` to get
 your input values. However, in a larger package distributed both as a CLI script *and* an importable Python module, a 'problem'
 arises: the module will try to read from the command line even if it's only being imported,
 leading to errors when it doesn't find in `sys.argv` what it thinks it needs to. This is what `__name__ == '__main__'`
@@ -354,9 +343,9 @@ and compiling command-line output itself? Or should things go the other way arou
 the CLI and making use of default values to 'fill in the gaps'?
 
 The former is probably the usual way to do things, and any command-line-parsing utility of course allows it by
-default. Jeffrey facilitates the latter, too, though. It has three parts to it:
+default. Joffrey facilitates the latter, too, though. It has three parts to it:
 
-- `cli.result`. A property of `jeffrey.CLI()` objects that, up until `cli.prepare()` is called, only returns default values.
+- `cli.result`. A property of `joffrey.CLI()` objects that, up until `cli.prepare()` is called, only returns default values.
 - `cli.prepare()`. Prepares this CLI to parse from the command line *rather than* use default values: specifically,
   causes `cli.result` to call `cli.parse()` the next time it's accessed, returning only those values from then on. This
   method should be called from the main command-line entry point, keeping it untouched if the module is imported.
@@ -374,7 +363,7 @@ Here's an example:
 
 ```py
 # cli.py
-from jeffrey import CLI
+from joffrey import CLI
 
 cli = CLI('Demo')
 
@@ -425,14 +414,14 @@ def bar():
 
 ### Simple CLI
 
-_**NOTE: jeffrey.simple will be deprecated soon -- or, at the very least, demoted to "recipe" status.**_
+_**NOTE: joffrey.simple will be deprecated soon -- or, at the very least, demoted to "recipe" status.**_
 
-As an alternative to the full `jeffrey.CLI` parser, one may use (as mentioned above) a reduced form of it, dubbed `jeffrey.simple`. It works as follows:
+As an alternative to the full `joffrey.CLI` parser, one may use (as mentioned above) a reduced form of it, dubbed `joffrey.simple`. It works as follows:
 
 ```py
-import jeffrey
+import joffrey
 
-@jeffrey.simple
+@joffrey.simple
 def main(positional, *consuming, flag):
     """Simple-CLI demo"""
     print('MAIN:', positional, consuming, flag)
@@ -469,36 +458,36 @@ SUBCMD: ({'s', 'e', 't'}, {'s', 'e', 't'}) whisper
 SUBCMD: ({'s', 'e', 't'}, {'s', 'e', 't'}) whisper
 ```
 
-`jeffrey.simple` has no concept of AND/OR/XOR clumps, so it isn't suitable for an application requiring those. It also, rather than being only a *parsing*
+`joffrey.simple` has no concept of AND/OR/XOR clumps, so it isn't suitable for an application requiring those. It also, rather than being only a *parsing*
 tool, somewhat submits to the "click philosophy" of intertwining argument parsing with the actual program execution: rather than assign each individual
-option a function processing only its own value and provide these values to the user without caring what happens afterward (as the standard `jeffrey.CLI`
+option a function processing only its own value and provide these values to the user without caring what happens afterward (as the standard `joffrey.CLI`
 does), it expects the actual functions of a given program to be decorated and passes CLI arguments to them directly. This is a bit iffy, but it does
-make for less boilerplate... overall, however, `jeffrey.CLI` should be preferred when possible.
+make for less boilerplate... overall, however, `joffrey.CLI` should be preferred when possible.
 
 Its implementation works because Python already has syntax to define positional parameters and name-only parameters in a function; positional options
-& flags on a command line can be likened to these easily. Currently, however, `jeffrey.simple` cannot handle **kwargs by taking arbitrary flags. If that
+& flags on a command line can be likened to these easily. Currently, however, `joffrey.simple` cannot handle **kwargs by taking arbitrary flags. If that
 turns out to be a necessity at some point down the line, this will change.
 
-If one should wish to configure their new `jeffrey.simple` objects, the following class attributes are reassignable:
+If one should wish to configure their new `joffrey.simple` objects, the following class attributes are reassignable:
 
-- `jeffrey.simple._` (`str`): As in `CLI.flag`, this value controls what the `_` character in a Python identifier's name will be replaced with on the command line.
-- `jeffrey.simple.flag_prefix` (`str`): Identical to `flag_prefix` in `CLI.__init__()`.
-- `jeffrey.simple.no_help` (`bool`): Identical to `no_help` in `CLI.__init__()`.
-- `jeffrey.simple.short_flags` (`bool`): Determines whether to create short aliases out of keyword-parameter names (e.g. `flag` becoming both `--flag` and `-f`).
+- `joffrey.simple._` (`str`): As in `CLI.flag`, this value controls what the `_` character in a Python identifier's name will be replaced with on the command line.
+- `joffrey.simple.flag_prefix` (`str`): Identical to `flag_prefix` in `CLI.__init__()`.
+- `joffrey.simple.no_help` (`bool`): Identical to `no_help` in `CLI.__init__()`.
+- `joffrey.simple.short_flags` (`bool`): Determines whether to create short aliases out of keyword-parameter names (e.g. `flag` becoming both `--flag` and `-f`).
 
 Note that changing these will not change their values for already-instantiated objects.  
 Note also that decorated functions still define `__call__`, so they can be called as normal rather than with `.run()` or `.search()`.
 
 
 ### More typehints
-Jeffrey itself provides two additional typehint aids: `booly` and `auto`.
+Joffrey itself provides two additional typehint aids: `booly` and `auto`.
 
-`jeffrey.booly`:
+`joffrey.booly`:
 - The usual `bool` type isn't particularly useful as a converter, because all the strings it's going to be passed are truthy. `booly`, on the other hand,
     evaluates args that are bool ... -y: booleanlike. Returns `True` if passed any of `yes`, `y`, `true`, `t`, `1`, and `False` if passed any of `no`, `n`, `false`, `f`.
     Argument is `str.lower`ed.
 
-`jeffrey.auto`:
+`joffrey.auto`:
 - `auto` by itself:
     - Works identically to a normal converter, but calls `ast.literal_eval()` on the string it's passed. If an error results, meaning the string does
     not contain a literal of any sort, returns the string itself.
@@ -511,7 +500,7 @@ Jeffrey itself provides two additional typehint aids: `booly` and `auto`.
 Feel free to play around with different `cli.parse()` arguments on the below example:
 
 ```py
-from jeffrey import auto, booly, CLI
+from joffrey import auto, booly, CLI
 
 cli = CLI()
 
