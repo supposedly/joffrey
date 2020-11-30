@@ -16,9 +16,8 @@ pip install joffrey
 ## Contents
 
 1. [Why?](#why)
-2. [The name](#the-name)
-3. [Examples](#examples)
-4. [Documentation](#documentation)
+2. [Examples](#examples)
+3. [Documentation](#documentation)
     1. [CLI](#cli)
     2. [Callbacks](#callbacks)
     3. [Workflow](#workflow)
@@ -44,11 +43,6 @@ depend on argparse underneath (which I'm trying my best to get away from), so I'
 Joffrey, by the way, is still an experiment. If it really doesn't solve the same problem for you that it does for me,
 I think you'd be better off trying something else -- [here's a list](https://gist.github.com/supposedly/01224262b816df21b601ab0784d5f999)
 of alternatives to check out!
-
-
-## The name
-**Pars**ley, for **pars**ing, is called جعفری /d͡ʒæʔfæˈɾi/ in Farsi. That glottal stop is elided into a vowel in Iran,
-giving /d͡ʒæːfæˈɾi/, and if you squint hard enough that resembles a heavily accented pronunciation of "Joffrey".
 
 [](#separator-for-pypi)
 
