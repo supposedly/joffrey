@@ -1,9 +1,12 @@
 # Yet Another Command-Line-Argument Parser
 
-[![Build Status](https://travis-ci.com/supposedly/joffrey.svg?branch=master)](https://travis-ci.com/supposedly/joffrey)
-[![codecov](https://codecov.io/gh/supposedly/joffrey/branch/master/graph/badge.svg)](https://codecov.io/gh/supposedly/joffrey)
+**Please note that this project was last updated in December 2018. It still works (at least until PEP 563 gets merged),
+but argparse has probably gotten better in the meantime. The rest of this README is written as if it's still December 2018.**
 
-I'm tired of working around argparse. This suits my needs a tad better; vaguely inspired by
+[![Build Status](https://travis-ci.com/supposedly/joffrey.svg?branch=master)](https://travis-ci.com/supposedly/joffrey)
+[![codecov](https://codecov.io/gh/supposedly/joffrey/branch/master/graph/badge.svg)](https://codecov.io/gh/supposedly/joffrey) <sub>(if the build is failing that's a lie)</sub>
+
+I'm tired of working around argparse. This suits my needs a bit better; vaguely inspired by
 [discord.py](https://github.com/Rapptz/discord.py)'s brilliant
 [ext.commands](http://discordpy.readthedocs.io/en/rewrite/ext/commands/index.html) framework.
 
@@ -29,20 +32,19 @@ pip install joffrey
 ## Why?
 I needed a way to define sort-of-complex interdependencies between command-line options. None of the packages
 I found\* were able to handle this out of the box to an acceptable degree, so I decided to try my own hand;
-I feel like the lib should be able to handle this stuff itself, without your needing to delegate roles like *"check
-that these two flags aren't used at the same time as this arg"* or *"make sure all these things appear
-together, or alternatively that this second thing does"* to external functions or post-parsing if-statements.
+I feel like your library should be able to handle this stuff itself, without your needing to delegate roles like
+*"check that these two flags aren't used at the same time as this arg"* or *"make sure all these things appear
+together, or if not, that this other thing does"* to external functions or post-parsing if-statements.
 
-*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which did beat Joffrey
+\*Note: about a month after starting I discovered "[RedCLAP](https://github.com/marekjm/clap)", which did beat Joffrey
 to the idea of AND/OR/XOR clumps (by the names of "requires", "wants", and "conflicts"), albeit with a very different
-design philosophy overall; credit's due for (AFAIK) originating that concept, however! I also at about the same time
-found [argh](https://argh.readthedocs.io/en/latest/index.html), which despite not solving the clumping issue appears
-to (by pure coincidence) share a number of features with Joffrey -- but it's currently looking for maintainers and does
-depend on argparse underneath (which I'm trying my best to get away from), so I'd say we're good.
+design philosophy overall. Credit's due for (AFAIK) originating that concept! At about the same time, I also found
+found [argh](https://argh.readthedocs.io/en/latest/index.html), which coincidentally shares a lot of features with
+Joffrey -- it does depend on argparse underneath, though, and I'm trying my best to get away from it.
 
-Joffrey, by the way, is still an experiment. If it really doesn't solve the same problem for you that it does for me,
+Joffrey's still an experiment, by the way. If it really doesn't solve the same problem for you that it does for me,
 I think you'd be better off trying something else -- [here's a list](https://gist.github.com/supposedly/01224262b816df21b601ab0784d5f999)
-of alternatives to check out!
+of alternatives to check out.
 
 [](#separator-for-pypi)
 
@@ -53,24 +55,26 @@ from joffrey import CLI, Group
 
 cli = CLI('Quick demo program')
 # CLI.__setattr__() on Group objects is special-cased slightly
-cli.sc = Group(XOR=0)  # 0 is just an identifier; it can be anything
+cli.sc = Group(XOR=0)
+# that 0 can be anything at all; the important thing is for other objects to use
+# the same value for XOR if they want to be XOR'd against this one
 
 
 @cli.arg()
 def name(name):
-    """Args, positional, are parsed in the order they're added in"""
+    """Args, positional, are parsed in the order they're defined in"""
     return name
 
 @cli.sc.clump(AND='blah')
 @cli.sc.flag(short='S')
 def scream(text):
-    """I have no mouth and I must ... yeah"""
+    """This is a flag, and its function gets called whenever it's encountered in input"""
     return text.upper()
 
 @cli.sc.clump(AND='blah')  # this flag and `scream` *must* appear together (same AND)
 @cli.sc.flag('verbosity', namespace={'count': 0})
 def verbose(nsp):
-    """This does nothing but it shows namespaces (which are always passed as the first arg)"""
+    """This flag does nothing, but it shows how namespaces work"""
     if nsp.count < 3:
         nsp.count += 1
     return nsp.count
@@ -103,7 +107,7 @@ Expected no more than one of the following flags/arguments: 'addition', ['scream
 >>> 
 >>> # etc
 ```
-And the mysterious `help/usage info...`:
+Here's what that `<help/usage info...>` actually looks like:
 ```
 Quick demo program
 
@@ -112,14 +116,14 @@ usage: <filename here> [-h | --help (NAME)] [-a | --addition (A) B...] [-S | --s
 ARGS
 	name            Args, positional, are parsed in the order they're added in
 FLAGS
-	scream          I have no mouth and I must ... yeah
+	scream          This is a flag, and its function gets called whenever it's encountered in input
 	addition        Who needs a calculator
 	help            Prints help and exits
-	verbosity       This does nothing but it shows namespaces (which are always passed as the first arg)
+	verbosity       This flag does nothing, but it shows how namespaces work
 ```
 (To get rid of the default `help` flag, pass `no_help=True` to `CLI()`)
 
-Additionally, one may use the reduced `joffrey.simple` parser. See the [joffrey.simple](#simple-cli) section for more.
+You might alternatively want to check out the reduced `joffrey.simple` parser. See the [joffrey.simple](#simple-cli) section for more.
 
 ## Documentation
 
@@ -133,17 +137,17 @@ The main dish.
 
 []()
 - `desc` (`str`): A short description of this program. Appears on the help screen.
-- `flag_prefix` (`str`): The 'short' prefix used to reference this cli's flags from the command line. Cannot be empty.
-    Derived from this as well is `CLI().long_prefix`, constructed by doubling `flag_prefix`.
-- `systemexit` (`bool`): Whether, during parsing, to yield to the default behavior of capturing exceptions then printing them
-    in a `SystemExit` call alongside the default help/usage info (`True`) -- or to allow exceptions to bubble up as normal (`False`).
-- `no_help` (`bool`): If `True`, prevents creation of a default `h` (short) / `help` (long) flag.
-- `propagate_unknowns` (`bool`): Only applies if a CLI has subcommands. Determines whether flags not recognized by a command should be
-  "bubbled up" and then handled by a parent. This is only supported on a rudimentary level; flags are propagated with no arguments unless
-  expressed as `--flag=VALUE` rather than `--flag VALUE`, but even that only allows for one. (This limitation is because it's impossible
-  for a subcommand to know how many parameters a flag expects when the flag is unknown to it entirely.)  
-  The flag-propagation mechanism in general is useful when, say, one has flags like "verbose" or "quiet" defined on the top-level CLI and
-  wishes for them to be accessible in subcommands.
+- `flag_prefix` (`str`): The 'short' prefix used to reference this cli's flags from the command line. It can't be empty.
+    `CLI().long_prefix` is automatically derived as two `flag_prefix`es back-to-back.
+- `systemexit` (`bool`): Whether to capture exceptions and print them in a `SystemExit` call alongside the default help/usage
+   info (`True`) -- or to allow exceptions to bubble up like in a normal Python program (`False`).
+- `no_help` (`bool`): Whether to nix the `h` (short) / `help` (long) flag that's created by default.
+- `propagate_unknowns` (`bool`): Only applies if a CLI has subcommands. Determines whether flags that a command doesn't recognize should be
+  "bubbled up" and then handled by a parent. This is only supported on a rudimentary level; flags' arguments aren't bubbled up at all unless
+  they get expressed as `--flag=VALUE` rather than `--flag VALUE`, but even that only allows for one argument. (This limitation is because
+  it's impossible for a subcommand to know how many parameters a flag expects when it doesn't even know the flag in the first place.)  
+  The flag-propagation mechanism is useful when, say, you've got flags like "verbose" or "quiet" defined on the top-level CLI and
+  want them to be accessible in subcommands.
 
 Methods:
 - `flag` (decorator):  
@@ -152,20 +156,23 @@ Methods:
     `@cli.flag(dest=None, short=_Null, *, default=_Null, namespace=None, required=False, help=None, _='-')`
     
     []()
-    - `dest` (`str`): The name this flag will be referenced by from the command line (with long prefix), as well as the name it will
-        appear as in the final `CLI.parse()` output. Defaults to the decorated function's `__name__`.
-    - `short` (`str`): This flag's single-character short alias, to be used from the command line with `cli.flag_prefix`. If `None`,
-        no short alias will be made; if left alone (i.e. passed `joffrey.misc._Null`), defaults to the first alphanumeric character in the
-        decorated function's `__name__`.
-    - `default`: Default value of this flag if not invoked during parsing. (no default value if `_Null`)
-    - `namespace` (`dict`): The starting values for this flag's "namespace", a `types.SimpleNamespace` object passed as the first argument
-        to the decorated function. Can be used to store values between repeated flag invocations. If `None`, no namespace will be created
-        or passed to said function.
-    - `required` (`bool`): Whether to error if this flag is not provided (independent of clump settings; do not use this with `XOR`, for instance).
-    - `help`: Help text to appear alongside this flag. If not provided, will be grabbed if present from the decorated function's `__doc__`.
-    - `_`: Determines how to replace underscores in the flag's name (be the name from `dest` or the function's `__name__`). Default `'-'`, meaning
-        that a flag named `check_twice` will be invoked as `--check-twice` (or if `_='.'`, then `--check.twice`). Final output will still use the
-        original pre-replacement name, however.
+    - `dest` (`str`): The name this flag will be referenced by from the command line (with long prefix), as well as the name it'll get
+        in the final `CLI.parse()` output. Defaults to the decorated function's `__name__`.
+    - `short` (`str`): The single-character alias for this flag, which goes with `cli.flag_prefix` in command-line input. If `short=None`,
+        this flag won't have a short alias; if `short` isn't given at all (i.e. if `short=joffrey.misc._Null`), it defaults to the first
+	alphanumeric character in the decorated function's `__name__`.
+    - `default`: The default value this flag ends up with if it's not encountered at all in input. (If `default` isn't given at all,
+      there'll be no default value, and this flag won't show up in the final output if it's not encountered.)
+    - `namespace` (`dict`): The starting values for this flag's "namespace", a `types.SimpleNamespace` object passed into the decorated
+      function's first argument. The namespace can store values between repeated flag invocations. If `None` or not given, no namespace
+      will be created or passed to the function.
+    - `required` (`bool`): Whether to error if this flag isn't provided (independent of any clump business; for example, don't use
+      `required=True` with `XOR`). Defaults to `False`.
+    - `help`: A description that'll appear alongside this flag in the parser's help/usage info. If not given, it'll be filled in with
+       the decorated function's `__doc__`.
+    - `_`: Determines how to replace underscores in the flag's name (whether the name's from `dest` or the function's `__name__`) on
+      the command line. Defaults to `'-'`, meaning that a flag named `check_twice` can be invoked as `--check-twice`. If `_='.'`,
+      for example, then that'll be `--check.twice`.
 - `arg` (decorator):  
     See [`Callbacks`](#callbacks) for more info.  
     
@@ -174,15 +181,14 @@ Methods:
     
     []()
     - `n` (`int`, Ellipsis): How many times this argument should be repeated. If `n` is 2, for example,
-        the decorated function will be called on two consecutively-passed command-line arguments.  
-    You can use the `namespace`, as in `flag`, to store info about this argument's values betweeen
-    calls.
-    If `n` is `...` or `Ellipsis`, this arg will consume as many arguments as it can (excluding flags)
-    before reaching either a flag or a subcommand.  
-    Intended to be used as a positional argument, as in `@cli.arg(2)` or `@cli.arg(...)`.
+      the decorated function will consume two command-line arguments in a row. You can use `namespace`,
+      as in `@cli.flag` above, to store info about this argument's values betweeen calls.  
+      If `n` is `...` (or `Ellipsis`), this arg will consume as many arguments as it can before reaching either
+      a flag or a subcommand.  
+      This should be passed as a positional argument for style points, as in `@cli.arg(2)` or `@cli.arg(...)`.
 - `clump` (decorator):  
-    Each component (AND, OR, XOR) takes an identifier, and any other entity bound to this cli with
-    the same identifier is considered part of the same clump.  
+    Clumps this in with other entities. Each component of a clump (AND, OR, XOR) takes an identifier, and any thing else clumped
+    in with the same identifier and the same component will count as part of the same "clump".
     
     `@cli.clump(AND=_Null, OR=_Null, XOR=_Null)`
     
@@ -195,20 +201,19 @@ Methods:
     - `XOR`: Clumps together entities of which *at most one* can appear. An XORed entity is allowed to appear alongside more than one
         other if it satisfies an AND clump (i.e. all other members of its AND clump appeared).
 - `command`:  
-    Returns a sub-command of this cli. When a command is detected in parsing input, parsing of its parent's options is abandoned and everything
-    to the right is passed to the subcommand instance.  
+    Creates and returns a sub-command of this CLI. When a command is detected in parsing input, its parent's options stop getting
+    parsed, and everything rightwards gets parsed by the subcommand instance instead.  
     
     `cli.command(name, desc='', *args, aliases=(), from_cli=None, AND=_Null, OR=_Null, XOR=_Null, _='-', **kwargs)`  
     *See identical args of `flag` and `clump`.*  
     *\*args, \*\*kwargs are passed to `CLI.__init__()`.*
     
     []()
-    - `name` (`str`): The name with which this command is to be invoked from the command line, as well as the name under which its final parsed
-        output will appear in its parent's.
-    - `aliases` (`tuple`): Alternative names with which this command can be invoked.
+    - `name` (`str`): The name this command can be invoked with from the command line.
+    - `aliases` (`tuple`): Alternative names this command can be invoked with.
     - `from_cli` (`CLI`): If given, creates a command instance from an existing top-level CLI or command and binds it to this top-level CLI or command.
 - `remove`:  
-    Removes an entity from the CLI, be it an arg, flag, or command.
+    Removes an entity from the CLI, whether an arg, flag, or command.
 
     `cli.remove(name)`
 
@@ -222,39 +227,42 @@ Methods:
     []()
     - `inp` (`str`, `list`): Input to parse args of. Converted using `shlex.split()` if given as a string. If `None`/not given,
       defaults to `sys.argv[1:]`.
-    - `systemexit`: If not None, overrides the CLI-level `systemexit` attribute. Has the same meaning, then, as `CLI.systemexit`.
-    - `strict`: If `True`, parses in "strict mode": Unknown flags will cause an error rather than be ignored, and a bad amount
-      of arguments (too few/too many) will do the same.
+    - `systemexit`: If not None, overrides the CLI-level `systemexit` attribute. That means it means the same thing as `CLI.systemexit`.
+    - `strict`: If `True`, parses in "strict mode": unknown flags will cause an error instead of getting ignored, and a bad amount
+      of arguments (too few/too many) will also cause an error.
 - `prepare`:  
-    Once used, `cli.result` will hold the return value of `cli.parse()` rather than `cli.defaults`. See [Workflow](#workflow) for more info.
+    Once this is called, `cli.result` will hold the return value of `cli.parse()` rather than `cli.defaults`. See [Workflow](#workflow) for more info.
     
     `cli.prepare(*args, **kwargs)`  
     *\*args, \*\*kwargs are passed to `CLI.parse()`.*
 
     []()
 - `result` *(property)*:  
-    Returns `cli.defaults` until `cli.prepare()` is used, thereafter returning the result of `cli.parse()` (as it had been called with the
-    arguments passed to `prepare()`). Again, see [Workflow](#workflow) for further info.
+    Returns `cli.defaults` until `cli.prepare()` is used, after which point it'll return the result of `cli.parse()` (as if it'd been called with the
+    arguments passed to `prepare()`). Again, see [Workflow](#workflow) for more.
 - `defaults` *(property)*:  
-    Returns the values of the `default=...` kwargs set from `cli.flag` and `cli.arg` as an `JoffreyNamespace` object.
+    Returns the values of the `default=...` kwargs set from `cli.flag` and `cli.arg` as a `JoffreyNamespace` object.
 - `__setattr__`:  
-    CLI objects have `__setattr__` overridden to facilitate the creation of "groups", which apply their clump settings to themselves
+    CLI objects have `__setattr__` overridden to help with creating "groups" of enities, which apply their clump settings to themselves
     as a whole rather than each of their members individually. Entities can also be clumped within groups.
     
     `cli.group_name_here = Group(*, required=False, AND=_Null, OR=_Null, XOR=_Null)`  
     *See identical args of `flag` and `clump`.*
 
-    If the R-value is not an `joffrey.Group` instance, the setattr call will go through normally.
+    If the R-value isn't a `joffrey.Group` instance, the setattr call will go through normally.
 
-    After the creation of a group, its methods such as `clump` (for internal clumping) can be accessed as `@cli.group_name_here.clump()`;
-    others are `arg`, `flag`, and `command`.
+    After the creation of a group, its methods can be accessed as `@cli.group_name_here.method()` (methods being `.clump()`,
+    `.arg()`, `.flag()`, and `.command()`. Using `.clump()` clumps the members of a group internally.)
 
 ### Callbacks
-`CLI.flag` and `CLI.arg` decorate functions; these functions are subsequently called when their flag/arg's name is detected during parsing.
 
-If a callback's parameters are [type-hinted](https://www.python.org/dev/peps/pep-3107/), the arguments passed will attempt to be "converted" by
-these typehints. That is, if the hint is a callable object, it will be called on a command-line argument passed in that spot. Consider the
-following flag:
+**This stuff is based on the original "do whatever you want with em" philosophy that Python's typehints came with.
+It'll break once PEP 563 is merged if I forget to update the code to work around it.**
+
+`CLI.flag` and `CLI.arg` decorate functions, which get called when their flag/arg's name is detected during parsing.
+
+If a callback's parameters are [type-hinted](https://www.python.org/dev/peps/pep-3107/), the arguments passed will try to be "converted" by
+those typehints. In other words, if the hint is a callable object, it'll be called on any command-line argument passed in that spot. Consider this:
 
 ```py
 @cli.flag('addition')
@@ -263,11 +271,11 @@ def add(a: int, b: int):
     return a + b
 ```
 
-If this flag is invoked from the command line as `--addition 1 2`, each of `1` and `2` will be given (as a string) to the `int` typehint and thus passed into
-the `add()` function as an integer. (No error would result if the hint were not callable; the command-line value would simply not be converted from a string)
+If this flag is invoked from the command line as `--addition 1 2`, each of `1` and `2` will be given (as a string) to the `int()`, which'll let them be passed into
+the `add()` function as an integer. (There wouldn't be an error if the hint weren't callable; the command-line value would just keep being a string)
 
 The number of arguments to be passed to a *flag* is determined by the number of parameters its function has; *args*, on the other hand, **always pass one value** to their callbacks. Flag callbacks are called as many times as the user
-writes the flag's name, and arg callbacks are called as many times as indicated by the `n` argument in `@arg()`. As an example for the latter, consider the following setup:
+writes the flag's name, and arg callbacks are called as many times as indicated by the `n` argument in `@arg()`. As an example for the latter, look at this setup:
 
 ```py
 @cli.arg()  # n = 1
@@ -285,7 +293,7 @@ def num_rest(nsp, _):
     return str(nsp.count)
 ```
 
-If this cli.parse() is invoked with the input `1   2.7   3.6   abc   xyz`:
+If cli.parse() is invoked with the input `1   2.7   3.6   abc   xyz`:
 - The `integer` arg will take one value, the first `1`
 - The `floats` arg has `n = 2`, so it will be called on each of `2.7` and `3.6` in order, each time
     appending the value to its namespace's `accumulate` list
@@ -310,12 +318,11 @@ def add(a: int = 4, *b: int):
     return a + sum(b)
 ```
 
-This demonstrates two new things: splat (`*`) parameters and default arguments. These in fact take advantage of standard Python machinery, with no additional
-finagling on Joffrey's end: flag callbacks by design are passed as many arguments as the user gives them, up to their number of parameters, and the presence of
-a splat simply brings said "number of parameters" up to `sys.maxsize` -- which, presumably, the user will always pass fewer arguments than. The presence of a
-default argument, similarly, just allows the callback to not error if the user doesn't pass it all of its parameters.
+This demonstrates two new things: splat (`*`) parameters and default arguments. They both work just like in normal Python: splat
+parameters let you pass in as many arguments as you like, and default parameters allow your parser not to error if it doesn' get
+an argument it was expecting.
 
-If this callback were invoked as...
+If that callback were invoked as...
 - `--addition 1 2`: would return `3`
 - `--addition 1 2 3 4 5 ... n`: would return `sum(range(1, n))` inclusive
 - `--addition 1`: would return `1`
@@ -323,21 +330,21 @@ If this callback were invoked as...
 
 ### Workflow
 Joffrey allows your whole package to center in functionality around its CLI.  
-I don't quite know if that's good or bad design&nbsp;-- leaning toward "bad", perhaps, because I only
-needed it for a package that started as a command-line script and grew awkwardly into an importable
-module&nbsp;-- but it certainly works, and it hasn't been particularly disagreeable IMO.
+I don't quite know if that's good or bad design&nbsp;-- leaning toward "bad", maybe, because I only
+needed it for a package that started as a command-line script and grew really awkwardly into an importable
+module&nbsp;-- but it definitely works, and it hasn't been that disagreeable IMHO.
 
 Here's the deal: in a small script, one that's (say) only a few files and meant to be run from the command line
-rather than being imported, it suffices to define `cli = joffrey.CLI(...)` and then call `cli.parse()` to get
+rather than being imported, it works just fine to define `cli = joffrey.CLI(...)` and then call `cli.parse()` to get
 your input values. However, in a larger package distributed both as a CLI script *and* an importable Python module, a 'problem'
 arises: the module will try to read from the command line even if it's only being imported,
-leading to errors when it doesn't find in `sys.argv` what it thinks it needs to. This is what `__name__ == '__main__'`
+leading to errors when it doesn't find anything it needs in `sys.argv`. This is what `__name__ == '__main__'`
 is for, of course, but *then*... what to do with the CLI? Should it be separated, hooking into the main module
 and compiling command-line output itself? Or should things go the other way around, with the module hooking into
 the CLI and making use of default values to 'fill in the gaps'?
 
-The former is probably the usual way to do things, and any command-line-parsing utility of course allows it by
-default. Joffrey facilitates the latter, too, though. It has three parts to it:
+The former is probably the usual way to do things, and any command-line-parsing utility of course lets you
+go that way by default. Joffrey helps you go the other way around, too, though. It has three parts to it:
 
 - `cli.result`. A property of `joffrey.CLI()` objects that, up until `cli.prepare()` is called, only returns default values.
 - `cli.prepare()`. Prepares this CLI to parse from the command line *rather than* use default values: specifically,
@@ -350,7 +357,7 @@ default. Joffrey facilitates the latter, too, though. It has three parts to it:
   when used from the command line it should only become set if the user sets it.
 
 The module as a whole can use `cli.result` to grab important values, and if `cli.prepare()` and `cli.set_defaults()` are used
-correctly, this structure will result in the module's behaving seamlessly regardless of whether it was invoked directly from
+correctly, this structure will help the module behave seamlessly regardless of whether it was invoked directly from
 the command line or whether it was imported.
 
 Here's an example:
@@ -408,7 +415,7 @@ def bar():
 
 ### Simple CLI
 
-_**NOTE: joffrey.simple will be deprecated soon -- or, at the very least, demoted to "recipe" status.**_
+_**NOTE: Consider joffrey.simple deprecated or something -- it should probably be demoted to "recipe" status.**_
 
 As an alternative to the full `joffrey.CLI` parser, one may use (as mentioned above) a reduced form of it, dubbed `joffrey.simple`. It works as follows:
 
@@ -453,42 +460,40 @@ SUBCMD: ({'s', 'e', 't'}, {'s', 'e', 't'}) whisper
 ```
 
 `joffrey.simple` has no concept of AND/OR/XOR clumps, so it isn't suitable for an application requiring those. It also, rather than being only a *parsing*
-tool, somewhat submits to the "click philosophy" of intertwining argument parsing with the actual program execution: rather than assign each individual
-option a function processing only its own value and provide these values to the user without caring what happens afterward (as the standard `joffrey.CLI`
+tool, submits a little bit to the "click philosophy" of intertwining argument parsing with the actual program execution: rather than assigning each individual
+option a function processing only its own value and providing these values to the user without caring what happens afterward (as the standard `joffrey.CLI`
 does), it expects the actual functions of a given program to be decorated and passes CLI arguments to them directly. This is a bit iffy, but it does
-make for less boilerplate... overall, however, `joffrey.CLI` should be preferred when possible.
+make for less boilerplate. Overall, though, `joffrey.CLI` should be preferred when possible.
 
-Its implementation works because Python already has syntax to define positional parameters and name-only parameters in a function; positional options
-& flags on a command line can be likened to these easily. Currently, however, `joffrey.simple` cannot handle **kwargs by taking arbitrary flags. If that
-turns out to be a necessity at some point down the line, this will change.
+`joffrey.simple` currently can't handle \*\*kwargs by taking arbitrary flags. If that turns out to be a necessity at some point down the line, this will change.
 
-If one should wish to configure their new `joffrey.simple` objects, the following class attributes are reassignable:
+If you'd like to configure all new `joffrey.simple` objects in one go, you can reassign these attributes on the class:
 
 - `joffrey.simple._` (`str`): As in `CLI.flag`, this value controls what the `_` character in a Python identifier's name will be replaced with on the command line.
 - `joffrey.simple.flag_prefix` (`str`): Identical to `flag_prefix` in `CLI.__init__()`.
 - `joffrey.simple.no_help` (`bool`): Identical to `no_help` in `CLI.__init__()`.
 - `joffrey.simple.short_flags` (`bool`): Determines whether to create short aliases out of keyword-parameter names (e.g. `flag` becoming both `--flag` and `-f`).
 
-Note that changing these will not change their values for already-instantiated objects.  
-Note also that decorated functions still define `__call__`, so they can be called as normal rather than with `.run()` or `.search()`.
+Note that changing these won't change their values for already-instantiated objects.  
+Also note that decorated functions still define `__call__`, so they can be called as normal rather than with `.run()` or `.search()`.
 
 
 ### More typehints
-Joffrey itself provides two additional typehint aids: `booly` and `auto`.
+Joffrey itself provides two extra typehint aids: `booly` and `auto`.
 
 `joffrey.booly`:
 - The usual `bool` type isn't particularly useful as a converter, because all the strings it's going to be passed are truthy. `booly`, on the other hand,
-    evaluates args that are bool ... -y: booleanlike. Returns `True` if passed any of `yes`, `y`, `true`, `t`, `1`, and `False` if passed any of `no`, `n`, `false`, `f`.
-    Argument is `str.lower`ed.
+    evaluates args that are bool ... -y: booleanlike. Returns `True` if passed any of `yes`, `y`, `true`, `t`, `1`, and `False` if passed any of
+    `no`, `n`, `false`, `f`, `0`. Argument is `str.lower`ed.
 
 `joffrey.auto`:
 - `auto` by itself:
     - Works identically to a normal converter, but calls `ast.literal_eval()` on the string it's passed. If an error results, meaning the string does
     not contain a literal of any sort, returns the string itself.
 - `auto(*types)`:
-    - Takes a series of `type` objects, and the resultant `auto` instance will too apply `ast.literal_eval()` on its argument -- but after
-    this is done, it will ensure that the resultant object passes an `isinstance(object, types)` check.  
-    Applying the bitwise negation operator, as in `~auto(*types)`, will cause it to instead ensure that the object passes a **`not`**`isinstance(object, types)` check.
+    - Takes a series of `type` objects, and the resultant `auto` instance also applies `ast.literal_eval()` on its argument -- but after that, it
+      ensures that the resultant object passes an `isinstance(object, types)` check.  
+      Applying the bitwise negation operator, as in `~auto(*types)`, will cause it to instead ensure that the object passes a **`not`**`isinstance(object, types)` check.
 
 
 Feel free to play around with different `cli.parse()` arguments on the below example:
